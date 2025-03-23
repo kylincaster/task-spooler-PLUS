@@ -32,7 +32,7 @@ Simple run the provided script
 ```
 ./make
 ```
-if you don't need the **taskset** processors binding feature, try to add`-DNO_TASKSET` option of `CFLAGS`.
+if you need the **taskset** processors binding feature, try to add`-DTASKSET` option of `CFLAGS`.
 
 **The default positions** of log file and database is defined in `default.inc`.
 
