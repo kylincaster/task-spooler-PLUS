@@ -41,8 +41,8 @@ static void init_version() {
   sprintf(version,
           "Task Spooler %s - a task queue system for the unix user.\n"
           "Copyright (C) 2007-%d  Kylin JIANG - Duc Nguyen - Lluis Batlle i "
-          "Rossell",
-          ts_version, 2023);
+          "Rossell\n",
+          ts_version, 2024);
 }
 
 static void default_command_line() {
@@ -603,145 +603,90 @@ static void go_background() {
 
 static void print_help(const char *cmd) {
   puts(version);
-  printf("usage: %s [action] [-ngfmdE] [-L <lab>] [-D <id>] [cmd...]\n", cmd);
+  printf("\nusage: %s [action] [-ngfmdE] [-L <lab>] [-D <id>] [cmd...]\n\n", cmd);
   printf("Environment Variables:\n");
-  printf("  TS_SOCKET        : The path to the Unix socket used by the 'ts' "
-         "command (default: $TMPDIR/socket-ts.root)\n");
-  printf("  TS_MAIL_FROM     : Specifies the sender for result emails "
-         "(default: %s).\n",
-         DEFAULT_EMAIL_SENDER);
-  printf("  TS_MAIL_TIME     : Sets the duration criterion to send an email "
-         "(default: %.3f seconds).\n",
-         DEFAULT_EMAIL_TIME);
-  printf("  TS_SERVICE_NAME  : Defines the name of the Task-Spooler service in "
-         "email notifications (default: %s).\n",
-         DEFAULT_HPC_NAME);
-  printf("  TS_MAXFINISHED   : Specifies the maximum number of finished jobs "
-         "in the queue (default: %d).\n", DEFAULT_MAXFINISHED);
-  printf("  TS_MAXCONN       : Sets the maximum number of 'ts' connections "
-         "allowed at once, must less than %d (default: %d).\n", MAXCONN, MAXCONN);
-  printf("  TS_ONFINISH      : Path to a binary called when a job finishes "
-         "(receives job ID, error status, output file, and command).\n");
-  printf("  TS_ENV           : Command executed on job enqueue to determine "
-         "job information.\n");
-  printf("  TS_SAVELIST      : File path to store the job list in case the "
-         "server crashes.\n");
-  printf("  TS_SLOTS         : Defines the maximum number of jobs that can run "
-         "simultaneously (read on server start with default 1 slot).\n");
-  printf("  TS_USER_PATH     : Path to the user configuration file (read on "
-         "server start).\n");
-  printf("  TS_LOGFILE_PATH  : Path to the job log file (read on server "
-         "start).\n");
-  printf("  TS_SQLITE_PATH   : Path to the SQLite database for job logs (read "
-         "on server start).\n");
-  printf("  TS_FIRST_JOBID   : Sets the first job ID (default: 1000, read on "
-         "server start).\n");
-  printf("  TS_SORTJOBS      : Control the job sequence sorting (read on "
-         "server start).\n");
-  printf("  TMPDIR           : Directory where output files and the default "
-         "socket are placed.\n");
+  printf("  TS_SOCKET        : Unix socket path (default: $TMPDIR/socket-ts.root)\n");
+  printf("  TS_MAIL_FROM     : Sender email for results (default: %s)\n", DEFAULT_EMAIL_SENDER);
+  printf("  TS_MAIL_TIME     : Email threshold in seconds (default: %.3f sec.)\n", DEFAULT_EMAIL_TIME);
+  printf("  TS_SERVICE_NAME  : Service name for Email notifications (default: %s)\n", DEFAULT_HPC_NAME);
+  printf("  TS_MAXFINISHED   : Max finished jobs in queue (default: %d)\n", DEFAULT_MAXFINISHED);
+  printf("  TS_MAXCONN       : Max concurrent connections (max %d, default: %d)", MAXCONN, MAXCONN);
+  printf("  TS_ONFINISH      : Binary executed post-job (args: ID, status, output, cmd)\n");
+  printf("  TS_ENV           : Command to gather job info during enqueue\n");
+  printf("  TS_SAVELIST      : Crash recovery file for job list\n");
+  printf("  TS_SLOTS         : Max concurrent jobs (server start, default: 1)\n");
+  printf("  TS_USER_PATH     : User config file path (server start)\n");
+  printf("  TS_LOGFILE_PATH  : Job log path (server start)\n");
+  printf("  TS_SQLITE_PATH   : SQLite DB path for logs (server start)\n");
+  printf("  TS_FIRST_JOBID   : Initial job ID (server start, default: 1000)\n");
+  printf("  TS_SORTJOBS      : Job queue sorting control (server start)\n");
+  printf("  TMPDIR           : Temporary Output files directory\n");
 
-  printf("Long option actions:\n");
-  printf("  --getenv   [var]                get the value of the specified "
-         "variable in server environment.\n");
-  printf("  --setenv   [var]                set the specified flag to server "
-         "environment.\n");
-  printf("  --unsetenv   [var]              remove the specified flag from "
-         "server environment.\n");
-  printf("  --get_label      || -a [id]     show the job label. Of the last "
-         "added, if not specified.\n");
-  printf("  --full_cmd       || -F [id]     show full command. Of the last "
-         "added, if not specified.\n");
-  printf(
-      "  --check_daemon                  Check the daemon is running or not.");
-  printf(
-      "  --count_running  || -R          return the number of running jobs\n");
-  printf(
-      "  --last_queue_id  || -q          show the job ID of the last added.\n");
-  printf("  --get_logdir                    Retrieve the path where log files "
-         "are stored.\n");
-  printf("  --set_logdir [path]             Set the path for storing log "
-         "files.\n");
-  printf("  --serialize   ||  -M [format]   Serialize the job list to the "
-         "specified format. Options: {default, json, tab}.\n");
-  printf("  --daemon                        Run the server as a daemon (Root "
-         "access only).\n");
-  printf("  --tmp                           save the logfile to tmp folder\n");
-  printf("  --hold [jobid]                  Pause a specific task by its job "
-         "ID.\n");
-  printf("  --cont [jobid]                  Resume a paused task by its job "
-         "ID.\n");
-  printf("  --suspend [user]                For regular users, pause all tasks "
-         "and lock the user account. \n"); 
-  printf("                                  For root user, lock all user "
-         "accounts or a specific user's account.\n");
-  printf("  --resume [user]                 For regular users, resume all "
-         "paused tasks and unlock the user account. \n");
-  printf("                                  For root user, unlock all user "
-         "accounts or a specific user's account.\n");
-  printf("  --lock                          Lock the server (Timeout: 30 "
-         "seconds). For root user, there is no timeout.\n");
-  printf("  --unlock                        Unlock the server.\n");
-  printf("  --relink [PID]                  Relink running tasks using their "
-         "[PID] in case of an unexpected failure.\n");
-  printf("  --no-taskset                    turn off taskset\n");
-  printf("  --job [joibid] || -J [joibid]   set the jobid of the new or relink "
-         "job\n");
+  printf("\nLong option actions:\n");
+  printf("  --getenv   [var]                Get server environment variable\n");
+  printf("  --setenv   [var]                Set server environment flag\n");
+  printf("  --unsetenv   [var]              Remove server environment flag\n");
+  printf("  --get_label      || -a [id]     Show job label (last added if unspecified)\n");
+  printf("  --full_cmd       || -F [id]     Show full command (last added if unspecified)\n");
+  printf("  --check_daemon                  Verify daemon status\n");
+  printf("  --count_running  || -R          Count running jobs\n");
+  printf("  --last_queue_id  || -q          Show last added job ID\n");
+  printf("  --get_logdir                    Display log directory path\n");
+  printf("  --set_logdir [path]             Configure log directory\n");
+  printf("  --serialize   ||  -M [format]   Export job list (formats: default/json/tab)\n");
+  printf("  --tmp                           Store logs in tmp folder\n");
+  printf("  --hold [jobid]                  Pause specified job\n");
+  printf("  --cont [jobid]                  Resume paused job\n");
+
+  printf("  --suspend [user]                User: pause tasks & lock account\n");
+  printf("                                  Root: lock all/specific user account\n");
+  
+  printf("  --resume [user]                 User: resume tasks & unlock account\n");
+  printf("                                  Root: unlock all/specific user accounts\n");
+
+  printf("  --lock                          Lock server (%d sec. timeout; root has no timeout)\n", DEFAULT_USER_LOCK_TIME);
+  printf("  --unlock                        Release server lock\n");
+  printf("  --relink [PID]                  Reconnect tasks after unexpected failures\n");
+  printf("  --no-taskset                    Disable taskset\n");
+  printf("  --job [joibid] || -J [joibid]   Assign/relink job ID\n");
+  printf("  --daemon                        Run as daemon (root only)\n");
+
   // printf("  --stime [start_time]            Set the relinked task by starting
   // time (Unix epoch).\n");
-  printf("Actions:\n");
-  printf("  -A           Display information for all users.\n");
-  printf("  -X           Update user configuration by UID (Max. %d users, "
-         "root access only)\n",
-         USER_MAX);
-  printf(
-      "  -K           Terminate the task spooler server (root access only)\n");
-  printf(
-      "  -C           Clear the list of finished jobs for the current user.\n");
+  printf("\nActions:\n");
+  printf("  -A           List info for all users\n");
+  printf("  -X           Update user config by UID (root only, max %d users)\n", USER_MAX);
+  printf("  -K           Stop server (root only)\n");
+  printf("  -C           Clear finished jobs for current user\n");
   printf("  -l           Show the job list (default action).\n");
-  printf("  -S [num]     Get/Set the maximum number of simultaneous server "
-         "jobs (root access only).\n");
-  printf("  -t [id]      \"tail -n 10 -f\" the output of the job. Last run if "
-         "not specified.\n");
-  printf("  -c [id]      like -t, but shows all the lines. Last run if not "
-         "specified.\n");
-  printf(
-      "  -p [id]      show the PID of the job. Last run if not specified.\n");
-  printf("  -o [id]      show the output file. Of last job run, if not "
-         "specified.\n");
-  printf("  -i [id]      show job information. Of last job run, if not "
-         "specified.\n");
-  printf("  -s [id]      show the job state. Of the last added, if not "
-         "specified.\n");
-  printf("  -r [id]      remove a job. The last added, if not specified.\n");
-  printf("  -w [id]      wait for a job. The last added, if not specified.\n");
-  printf("  -k [id]      send SIGTERM to the job process group. The last run, "
-         "if not specified.\n");
-  printf("  -T           send SIGTERM to all running job groups.  (only "
-         "available for root)\n");
-  printf(
-      "  -u [id]      put that job first. The last added, if not specified.\n");
-  printf("  -U <id-id>   swap two jobs in the queue.\n");
-  printf("  -h | --help  show this help\n");
-  printf("  -V           show the program version\n");
-  printf("Options adding jobs:\n");
-  printf("  -B           in case of full clients on the server, quit instead "
-         "of waiting.\n");
-  printf("  -n           don't store the output of the command.\n");
-  printf("  -E           Keep stderr apart, in a name like the output file, "
-         "but adding '.e'.\n");
-  printf("  -O           Set name of the log file (without any path).\n");
-  printf("  -z           gzip the stored output (if not -n).\n");
-  printf("  -f           don't fork into background.\n");
-  printf("  -m <email>   send the output by e-mail (uses ssmtp).\n");
-  printf("  -d           the job will be run after the last job ends.\n");
-  printf(
-      "  -D <id,...>  the job will be run after the job of given IDs ends.\n");
-  printf("  -W <id,...>  the job will be run after the job of given IDs ends "
-         "well (exit code 0).\n");
-  printf("  -L [label]   name this task with a label, to be distinguished on "
-         "listing.\n");
-  printf("  -N [num]     number of slots required by the job (1 default).\n");
+  printf("  -S [num]     Get/set max concurrent jobs (root only)\n");
+  printf("  -t [id]      Tail -f last 10 lines (last job if unspecified)\n");
+  printf("  -c [id]      Show complete output (last job if unspecified)\n");
+  printf("  -p [id]      Display job PID (last job if unspecified)\n");
+  printf("  -o [id]      Show output file path (last job if unspecified)\n");
+  printf("  -i [id]      Display job info (last job if unspecified)\n");
+  printf("  -s [id]      Show job state (last added if unspecified)\n");
+  printf("  -r [id]      Remove job (last added if unspecified)\n");
+  printf("  -w [id]      Wait for job (last added if unspecified)\n");
+  printf("  -k [id]      Send SIGTERM to job (last run if unspecified)\n");
+  printf("  -T           SIGTERM all jobs (root only)\n");
+  printf("  -u [id]      Prioritize job (last added if unspecified)\n");
+  printf("  -U <id-id>   Swap two jobs in queue\n");
+  printf("  -h | --help  Show help\n");
+  printf("  -V           Display version\n");
+  printf("\nOptions adding jobs:\n");
+  printf("  -B           Exit if server full\n");
+  printf("  -n           Disable output storage\n");
+  printf("  -E           Separate stderr to .e file\n");
+  printf("  -O           Set log filename (no path)\n");
+  printf("  -z           Gzip output (unless -n)\n");
+  printf("  -f           Run in foreground\n");
+  printf("  -m <email>   Email results via ssmtp\n");
+  printf("  -d           Schedule execution after last job\n");
+  printf("  -D <id,...>  Schedule execution after specified IDs\n");
+  printf("  -W <id,...>  Schedule after successful IDs (exit 0)\n");
+  printf("  -L [label]   Assign job label\n");
+  printf("  -N [num]     Required slots (default: 1)\n");
 }
 
 static void print_version() { puts(version); }
@@ -867,7 +812,7 @@ int main(int argc, char **argv) {
     if (cont_uid != 0) {
       printf("To resume user ID: %d\n", cont_uid);
     } else {
-      printf("To rResume all users by `Root`\n");
+      printf("To resume all users from `Root`\n");
     }
     c_resume_user(cont_uid);
     c_wait_server_lines();
