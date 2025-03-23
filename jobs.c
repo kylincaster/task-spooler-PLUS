@@ -370,6 +370,25 @@ struct Job *findjob(int jobid) {
   return NULL;
 }
 
+int s_update_slots_usage() {
+  int slots_usage = 0;
+  struct Job *p;
+  /* Show Queued or Running jobs */
+  p = firstjob.next;
+  while (p != 0) {
+    if (p->state == RUNNING) {
+      slots_usage += p->num_slots;
+    }
+    p = p->next;
+  }
+  if (slots_usage != busy_slots) {
+    printf("Error: invalid slots: %d vs %d\n", slots_usage, busy_slots);
+    busy_slots = slots_usage;
+  }
+  return slots_usage;
+}
+
+
 static struct Job *job_by_pid(int pid) {
   if (pid == 0)
     return NULL;
@@ -939,6 +958,7 @@ static int find_last_stored_jobid_finished() {
 
 /* Returns job id or -1 on error */
 int s_newjob(int s, struct Msg *m, int ts_UID) {
+  s_update_slots_usage();
 
   struct Job *p = NULL;
   int res;
@@ -1767,9 +1787,11 @@ void s_send_last_id(int s) {
 void s_refresh_users(int s) {
   read_user_file(get_user_path());
   send_list_line(s, "refresh the list success!\n");
+  s_update_slots_usage();
 }
 
 void s_suspend_user_all(int s) {
+  s_update_slots_usage();
   for (int i = 1; i < user_number; i++) {
     s_suspend_user(s, i);
   }
@@ -2099,6 +2121,7 @@ int s_check_locker(int ts_UID) {
 
 void s_lock_server(int s, int ts_UID) {
   if (ts_UID == 0) {
+    s_update_slots_usage();
     user_locker = 0;
     locker_time = time(NULL);
     snprintf(buff, 255, "lock the task-spooler server by Root\n");

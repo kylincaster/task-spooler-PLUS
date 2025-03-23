@@ -24,6 +24,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <time.h>
 
 #ifdef HAVE_UCRED_H
 #include <ucred.h>
@@ -82,6 +83,9 @@ static void s_send_version(int s) {
 
   send_msg(s, &m);
 }
+
+
+
 
 static void sigterm_handler(int n) {
   const char *dumpfilename;
@@ -292,8 +296,6 @@ void server_main(int notify_fd, char *_path) {
   server_loop(ls);
 }
 
-
-
 static int get_conn_of_jobid(int jobid) {
   int i;
   for (i = 0; i < nconnections; ++i)
@@ -489,6 +491,15 @@ static enum Break client_read(int index) {
   }
   // printf("client_read(%d), m.type = %d\n", index, m.type);
   int ts_UID = client_cs[index].ts_UID;
+
+  // Time-out unlock
+  if (user_locker > 0) { // locked by no-root user
+    time_t dt = time(NULL) - locker_time;
+    if (dt > DEFAULT_USER_LOCK_TIME) {
+      user_locker = -1;
+    }
+  }
+
 
   /* Process message */
   switch (m.type) {
