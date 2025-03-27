@@ -4,6 +4,7 @@
 #define DEFAULT_EMAIL_SENDER "XXX@foxmail.com"
 #define DEFAULT_EMAIL_TIME 45.0
 #define DEFAULT_USER_LOCK_TIME 30
+#define DEFAULT_ROOT_LOCK_TIME 86400
 #define DEFAULT_HPC_NAME "intel_laptop"
 
 enum { MAXCONN = 1000 };

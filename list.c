@@ -79,8 +79,11 @@ char *joblist_headers() {
   char extra[100] = "";
   if (user_locker != -1) {
     time_t dt = time(NULL) - locker_time;
-    snprintf(extra, 100, "Locked by `%s` for %ld sec.",
-             user_name[user_locker], dt);
+    float real_ms = (float)(dt);
+    const char *unit = time_rep(&real_ms);
+
+    snprintf(extra, 100, "Locked by `%s` for %3.2f %s.",
+             user_name[user_locker], real_ms, unit);
   }
 
   line = malloc(256);
@@ -326,7 +329,7 @@ static char *plainprint_noresult(const struct Job *p) {
     error("Malloc for %i failed.\n", maxlen);
   
   float real_ms = 0;
-  const char* unit = "sx";
+  const char* unit = "sec";
   if (p->state == RUNNING) {
     struct timeval starttv = p->info.start_time;
     struct timeval endtv;
