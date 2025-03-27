@@ -495,7 +495,9 @@ static enum Break client_read(int index) {
   // Time-out unlock
   if (user_locker > 0) { // locked by no-root user
     time_t dt = time(NULL) - locker_time;
-    if (dt > DEFAULT_USER_LOCK_TIME) {
+    if (user_locker == 0 && dt > DEFAULT_ROOT_LOCK_TIME) {
+      user_locker = -1;
+    } else if (dt > DEFAULT_USER_LOCK_TIME) {
       user_locker = -1;
     }
   }

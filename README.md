@@ -42,7 +42,8 @@ if you need the **taskset** processors binding feature, try to add`-DTASKSET` op
 #define DEFAULT_SQLITE_PATH "/home/kylin/task-spooler/task-spooler.db"
 #define DEFAULT_EMAIL_SENDER "kylincaster@foxmail.com"
 #define DEFAULT_EMAIL_TIME 45.0
-#define DEFAULT_USER_LOCK_TIME 5
+#define DEFAULT_USER_LOCK_TIME 30
+#define DEFAULT_ROOT_LOCK_TIME 86400
 #define DEFAULT_HPC_NAME "intel_laptop"
 
 enum { MAXCONN = 1000 };
