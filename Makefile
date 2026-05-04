@@ -23,7 +23,9 @@ OBJECTS=main.o \
 	user.o \
 	cJSON.o \
 	sqlite.o \
+	runtime_limit.o \
 	taskset.o
+
 TARGET=ts
 INSTALL=install -c
 

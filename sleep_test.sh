@@ -1,33 +1,35 @@
 #!/usr/bin/env bash
 
-# timer.sh
-# Usage:
-#   ./timer.sh            # 默认运行 10 秒
-#   ./timer.sh 30         # 运行 30 秒
-
 duration=${1:-10}
 
-# 检查输入是否为正整数
 if ! [[ "$duration" =~ ^[0-9]+$ ]] || [ "$duration" -le 0 ]; then
     echo "Error: please provide a positive integer number of seconds."
     exit 1
 fi
 
-start_time=$(date +%s)
+start=$(date +%s)
 
-for ((i=0; i<duration; i++)); do
-    now=$(date '+%Y-%m-%d %H:%M:%S')
-    elapsed=$i
-    remaining=$((duration - i))
+echo "Start CPU busy loop for ~${duration}s (wall time)"
 
-    printf "[%s] Elapsed: %3ds | Remaining: %3ds\n" \
-        "$now" "$elapsed" "$remaining"
+while true; do
+    now=$(date +%s)
+    elapsed=$((now - start))
 
-    sleep 1
+    # 输出状态（可选）
+    printf "\rElapsed: %3ds | Remaining: %3ds" \
+        "$elapsed" "$((duration - elapsed))"
+
+    # 关键：这里做计算，占用CPU
+    for ((i=0; i<100000; i++)); do
+        :  # no-op
+    done
+
+    if (( elapsed >= duration )); then
+        break
+    fi
 done
 
-end_time=$(date '+%Y-%m-%d %H:%M:%S')
-echo "[$end_time] Timer completed successfully."
+echo
+echo "Done."
 
 exit 0
-
