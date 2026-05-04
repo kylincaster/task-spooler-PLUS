@@ -269,9 +269,6 @@ void c_check_version() {
   if (res == -1)
     error("Error calling recv_msg in c_check_version");
   if (m.type != VERSION || m.u.version != PROTOCOL_VERSION) {
-    printf("Wrong server version. Received %i, expecting %i\n", m.u.version,
-           PROTOCOL_VERSION);
-
     error("Wrong server version. Received %i, expecting %i", m.u.version,
           PROTOCOL_VERSION);
   }

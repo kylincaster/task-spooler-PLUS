@@ -61,7 +61,8 @@ enum MsgTypes {
   SET_LOGDIR,
   GET_ENV,
   SET_ENV,
-  UNSET_ENV
+  UNSET_ENV,
+  ERROR_INFO,
 };
 
 enum ListFormat {

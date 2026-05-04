@@ -347,6 +347,14 @@ static void server_loop(int ls) {
       client_cs[nconnections].ts_UID = get_tsUID(scred.uid);
 
       if (client_cs[nconnections].ts_UID == -1) {
+        printf("Unauthorized connection from UID: %d, please check the user configuration file\n", scred.uid);
+        struct Msg m = default_msg();
+        m.type = ERROR_INFO;
+        char buf[128];
+        sprintf(buf, "Unauthorized connection from UID: %d\n", scred.uid);
+        m.u.size = strlen(buf) + 1;
+        send_msg(cs, &m);
+        send_bytes(cs, buf, m.u.size);
         close(cs);
       } else {
         nconnections++;

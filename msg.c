@@ -73,7 +73,11 @@ int recv_msg(const int fd, struct Msg *m) {
         warning_msg(m, "Receiving a message from %i, received %i bytes, "
                        "should have received %i.", fd,
                     res, sizeof(*m));
-
+    if (m->type == ERROR_INFO) {
+        char* buf = (char*)malloc(sizeof(*buf)*m->u.size);
+        recv_bytes(fd, buf, m->u.size);
+        error("ERROR: %s", buf);
+    };
     return res;
 }
 
