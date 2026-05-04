@@ -504,7 +504,7 @@ char *joblistdump_torun(const struct Job *p);
 
 char *joblistdump_headers();
 
-const char *time_rep(float *t);
+const char *time_rep(double *t);
 
 /* print.c */
 int fd_nprintf(int fd, int maxsize, const char *fmt, ...);
@@ -565,6 +565,9 @@ time_t locker_time;
 int jobsort_flag;
 int is_sleep(int pid);
 // int check_running_dead(int jobid);
+
+/* runtime_limit.c */
+double get_cpu_time_by_pid(int pid);
 
 /* jobs.c */
 void s_user_status_all(int s);

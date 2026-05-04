@@ -79,7 +79,7 @@ char *joblist_headers() {
   char extra[100] = "";
   if (user_locker != -1) {
     time_t dt = time(NULL) - locker_time;
-    float real_ms = (float)(dt);
+    double real_ms = (float)(dt);
     const char *unit = time_rep(&real_ms);
 
     snprintf(extra, 100, "Locked by `%s` for %3.2f %s.",
@@ -180,16 +180,24 @@ static char *print_noresult(const struct Job *p) {
 
   struct timeval starttv = p->info.start_time;
   struct timeval endtv;
-  float real_ms;
+  double real_ms;
   const char *unit;
+  char buf[128] = " ";
   if (p->state == QUEUED || p->pid == 0) {
     real_ms = 0;
-    unit = " ";
   } else {
     gettimeofday(&endtv, NULL);
     real_ms = endtv.tv_sec - starttv.tv_sec +
-              ((float)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
+              ((double)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
     unit = time_rep(&real_ms);
+    double runtime = get_cpu_time_by_pid(p->pid);
+    // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
+    int rate = (runtime*100.0) / real_ms;
+    if (rate < 80) {
+      sprintf(buf, "%s %d%%", unit, rate);
+    } else {
+      sprintf(buf, "%s", unit);
+    }
   }
 
   line = (char *)malloc(maxlen);
@@ -201,7 +209,7 @@ static char *print_noresult(const struct Job *p) {
   if (p->label) {
     char *label = shorten(p->label, 10);
     snprintf(line, maxlen, "%-4i %-9s %-6i %-7s %-10s %6.2f%s  %-21s | %s\n",
-             p->jobid, jobstate, p->num_slots, uname, label, real_ms, unit, cmd,
+             p->jobid, jobstate, p->num_slots, uname, label, real_ms, buf, cmd,
              output_filename);
     free(label);
     free(cmd);
@@ -209,7 +217,7 @@ static char *print_noresult(const struct Job *p) {
     char *cmd = shorten(p->command + p->command_strip, cmd_len);
     char *label = "(..)";
     snprintf(line, maxlen, "%-4i %-9s %-6i %-7s %-10s %6.2f%s  %-21s | %s\n",
-             p->jobid, jobstate, p->num_slots, uname, label, real_ms, unit, cmd,
+             p->jobid, jobstate, p->num_slots, uname, label, real_ms, buf, cmd,
              output_filename);
     free(cmd);
   }
@@ -223,7 +231,7 @@ static char *print_result(const struct Job *p) {
   const char *output_filename;
   /* 20 chars should suffice for a string like "[int,int,..]&& " */
   char dependstr[1024] = "[]&&";
-  float real_ms = p->result.real_ms;
+  double real_ms = p->result.real_ms;
   if (real_ms == 0.0) {
     real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
     real_ms += 1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
@@ -328,19 +336,27 @@ static char *plainprint_noresult(const struct Job *p) {
   if (line == NULL)
     error("Malloc for %i failed.\n", maxlen);
   
-  float real_ms = 0;
-  const char* unit = "sec";
+  double real_ms = 0;
+  char buf[128] = "";
   if (p->state == RUNNING) {
     struct timeval starttv = p->info.start_time;
     struct timeval endtv;
     gettimeofday(&endtv, NULL);
     real_ms = endtv.tv_sec - starttv.tv_sec +
-                ((float)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
-    unit = time_rep(&real_ms);
+                ((double)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
+    const char* unit = time_rep(&real_ms);
+    double runtime = get_cpu_time_by_pid(p->pid);
+    // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
+    int rate = (runtime*100.0) / real_ms;
+    if (rate < 80) {
+      sprintf(buf, "%s %d%%", unit, rate);
+    } else {
+      sprintf(buf, "%s", unit);
+    }
   }
   snprintf(line, maxlen, "%i\t%s\t%d\t%s\t%s\t%i\t%.2f%s\t%s\t%s\t%s\n", 
     p->jobid, jobstate, p->num_slots, user_name[p->ts_UID], label,
-    p->result.errorlevel, real_ms, unit, p->command + p->command_strip,
+    p->result.errorlevel, real_ms, buf, p->command + p->command_strip,
     dependstr, output_filename);
 
   return line;
@@ -354,7 +370,7 @@ static char *plainprint_result(const struct Job *p) {
   const char *output_filename;
   /* 20 chars should suffice for a string like "[int,int,..]&& " */
   char dependstr[256] = "[]";
-  float real_ms = p->result.real_ms;
+  double real_ms = p->result.real_ms;
   if (real_ms == 0.0) {
     real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
     real_ms += 1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
@@ -443,8 +459,8 @@ char *joblistdump_torun(const struct Job *p) {
   return line;
 }
 
-const char *time_rep(float *t) {
-  float time_in_sec = *t;
+const char *time_rep(double *t) {
+  double time_in_sec = *t;
   char *unit = "s";
   if (time_in_sec > 250) {
     time_in_sec /= 60;

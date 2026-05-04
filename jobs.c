@@ -78,7 +78,7 @@ void setup_ssmtp() {
 }
 
 static void send_mail_via_ssmtp(struct Job *p) {
-  float real_ms = p->result.real_ms; // units in second
+  double real_ms = p->result.real_ms; // units in second
   if (real_ms == 0.0) {
     real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
     real_ms += 1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
@@ -1714,7 +1714,7 @@ void s_job_info(int s, int jobid) {
 
   m.type = INFO_DATA;
 
-  float t;
+  double t;
   send_msg(s, &m);
   pinfo_dump(&p->info, s);
   fd_nprintf(s, 100, "Command: ");
