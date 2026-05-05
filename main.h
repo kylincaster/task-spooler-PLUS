@@ -143,6 +143,7 @@ struct CommandLine {
   int taskpid;       /* to restore task by pid */
   int require_elevel; /* whether requires error level of dependencies or not */
   long start_time;
+  int wall_time;
   enum ListFormat list_format;
 };
 
@@ -187,6 +188,7 @@ struct Msg {
       int num_slots;
       int taskpid;
       long start_time;
+      int wall_time;
       int taskset_flag;
     } newjob;
     struct {
@@ -242,7 +244,7 @@ struct Job {
   int store_output;
   int pid;
   int ts_UID;
-  double walltime; /* wall-time limit */
+  int wall_time; /* wall-time limit */
   int should_keep_finished;
   int *depend_on;
   int depend_on_size;

@@ -1011,7 +1011,11 @@ int s_newjob(int s, struct Msg *m, int ts_UID) {
   p->depend_on_size = m->u.newjob.depend_on_size;
   p->depend_on = 0;
   p->taskset_flag = m->u.newjob.taskset_flag;
-
+  p->wall_time = get_max_wall_time();
+  // printf("wall time = %d\n", m->u.newjob.wall_time);
+  if (p->wall_time > m->u.newjob.wall_time) {
+    p->wall_time = m->u.newjob.wall_time;
+  }
   /* this error level here is used internally to decide whether a job should be
    * run or not so it only matters whether the error level is 0 or not. thus,
    * summing the absolute error levels of all dependencies is sufficient.*/
@@ -1759,15 +1763,26 @@ void s_job_info(int s, int jobid) {
     fd_nprintf(s, 100, "Email: %s\n", p->email);
   }
 
+  {
+    double t_wall = p->wall_time * 3600.0; // to seconds
+    const char *unit = time_rep(&t_wall);
+    fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
+  }
+
   if (p->state == RUNNING) {
     t = pinfo_time_until_now(&p->info);
+    
+    double t_cpu = get_cpu_time_by_pid(p->pid);
+    const char *unit = time_rep(&t_cpu);
+    fd_nprintf(s, 100, "CPU time: %.4f %s\n", t_cpu, unit);
   } else if (p->state == FINISHED) {
     t = pinfo_time_run(&p->info);
     fd_nprintf(s, 100, "End time: %s", ctime(&p->info.end_time.tv_sec));
   }
+
   const char *unit = time_rep(&t);
-  if (t > 0)
-    fd_nprintf(s, 100, "Time running: %.4f %s\n", t, unit);
+  if (t > 0) 
+    fd_nprintf(s, 100, "Job time: %.4f %s\n", t, unit);
   if (p->state == FINISHED) {
     struct Result *res = &(p->result);
     fd_nprintf(s, 100, "Error: %d Signal: %d Die: %d\n", res->errorlevel,
