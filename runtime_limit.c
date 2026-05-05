@@ -94,6 +94,6 @@ double get_cpu_time_by_pid(int pid) {
     }
 
     total_time = (double)(utime + stime) / ticks;
-    printf("total_time = %f, %ld, %ld %ld\n", total_time, utime, stime, ticks);
+    // printf("total_time = %f, %ld, %ld %ld\n", total_time, utime, stime, ticks);
     return total_time; // 单位：秒
 }

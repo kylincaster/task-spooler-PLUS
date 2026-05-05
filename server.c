@@ -592,7 +592,8 @@ static enum Break client_read(int index) {
       // close(s);
       break; 
     }
-
+    
+    // start a new job in servers
     client_cs[index].jobid = s_newjob(s, &m, ts_UID);
     client_cs[index].hasjob = 1;
 

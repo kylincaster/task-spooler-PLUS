@@ -99,6 +99,7 @@ void c_new_job() {
   m.u.newjob.num_slots = command_line.num_slots;
   m.u.newjob.taskpid = command_line.taskpid;
   m.u.newjob.start_time = command_line.start_time;
+  m.u.newjob.wall_time = command_line.wall_time; // in hrs
   m.u.newjob.taskset_flag = command_line.taskset_flag;
   
   

@@ -66,6 +66,7 @@ static void default_command_line() {
   command_line.logfile = NULL;
   command_line.taskpid = 0;
   command_line.start_time = 0;
+  command_line.wall_time = DEFAULT_MAX_WALL_TIME; // in hours
   command_line.jobid = 0;
   command_line.list_format = DEFAULT;
 #ifdef TASKSET
@@ -185,6 +186,7 @@ static struct option longOptions[] = {
     {"stime", required_argument, NULL, 0},
     {"check_daemon", no_argument, NULL, 0},
     {"no-bind", no_argument, NULL, 0},
+    {"wtime", required_argument, NULL, 0},
     {NULL, 0, NULL, 0}};
 
 void parse_opts(int argc, char **argv) {
@@ -262,6 +264,10 @@ void parse_opts(int argc, char **argv) {
         }
       } else if (strcmp(longOptions[optionIdx].name, "stime") == 0) {
         command_line.start_time = str2int(optarg);
+      } else if (strcmp(longOptions[optionIdx].name, "wtime") == 0) {
+        command_line.wall_time = str2int(optarg);
+        if (command_line.wall_time <= 0)
+            error("Wall time must be greater than 0 (got %d)\n", command_line.wall_time);
       } else if (strcmp(longOptions[optionIdx].name, "no-bind") == 0) {
         command_line.taskset_flag = 0;
       } else
@@ -619,6 +625,7 @@ static void print_help(const char *cmd) {
   printf("  TS_LOGFILE_PATH  : Job log path (server start)\n");
   printf("  TS_SQLITE_PATH   : SQLite DB path for logs (server start)\n");
   printf("  TS_FIRST_JOBID   : Initial job ID (server start, default: 1000)\n");
+  printf("  TS_MAX_WALL_TIME : Max job wall-time in hours, (server start, default: %d hr)\n", DEFAULT_MAX_WALL_TIME);
   printf("  TS_SORTJOBS      : Job queue sorting control (server start)\n");
   printf("  TMPDIR           : Temporary Output files directory\n");
 
@@ -649,6 +656,7 @@ static void print_help(const char *cmd) {
   printf("  --relink [PID]                  Reconnect tasks after unexpected failures\n");
   printf("  --no-taskset                    Disable taskset\n");
   printf("  --job [joibid] || -J [joibid]   Assign/relink job ID\n");
+  printf("  --wtime [walltime]              Wall time limit in hours (will be clamped to system maximum if exceeded).\n");
   printf("  --daemon                        Run as daemon (root only)\n");
 
   // printf("  --stime [start_time]            Set the relinked task by starting
