@@ -2,6 +2,48 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
+#include <ctype.h>
+
+#include "default.inc"
+
+
+static double str2double(const char *str) {
+    char *endptr;
+    errno = 0;
+
+    double val = strtod(str, &endptr);
+
+    if (str == endptr) {
+        return -1;
+    }
+
+    if (errno == ERANGE) {
+        return -1;
+    }
+
+    // 3. 有非法字符（非空格）
+    while (*endptr) {
+        if (!isspace((unsigned char)*endptr)) {
+            return -1;
+        }
+        endptr++;
+    }
+
+    return val;
+}
+
+double get_max_wall_time() {
+  const char* str = getenv("TS_MAX_WALL_TIME");
+  if (str == NULL || strlen(str) == 0) {
+    ;
+  } else {
+    double max_walltime = str2double(str);
+    if (max_walltime > 0)
+        return max_walltime;
+  }
+  return DEFAULT_MAX_WALL_TIME;
+}
 
 double get_cpu_time_by_pid(int pid) {
     char path[64];
