@@ -370,17 +370,50 @@ struct Job *findjob(int jobid) {
   return NULL;
 }
 
+int s_check_timeout(struct Job* p) {
+  // printf("check job %d\n", p->jobid);
+  if (p->state != RUNNING || p->pid == 0) { 
+    return 0;
+  }
+  
+  double wall_time = p->wall_time; // * 3600.0; // in hours
+  double cpu_time = get_cpu_time_by_pid(p->pid);
+  if (cpu_time <= wall_time || cpu_time < 10) {
+    return 0;
+  }
+  printf("Job[%d|pid:%d] is time-out %d hr\n", p->jobid, p->pid, p->wall_time);
+  if (safe_pause_pid(p) == 0) {
+    p->state = PAUSE;
+    p->wall_time = -abs(p->wall_time)-300;
+    return 1;
+  }
+  return 1; // time-out
+}
+
 int s_update_slots_usage() {
   int slots_usage = 0;
   struct Job *p;
   /* Show Queued or Running jobs */
   p = firstjob.next;
+  
+  for (int i = 0; i < user_number; i++) {
+    user_busy[i] = user_jobs[i] = user_queue[i] = 0;
+  }
+
   while (p != 0) {
+    int i = p->ts_UID;
     if (p->state == RUNNING) {
-      slots_usage += p->num_slots;
+      if (!s_check_timeout(p)) {
+        slots_usage += p->num_slots;
+        user_busy[i] += p->num_slots;
+        user_jobs[i]++;
+      }
+    } else {
+      user_queue[i]++;
     }
     p = p->next;
   }
+
   if (slots_usage != busy_slots) {
     printf("Error: invalid slots: %d vs %d\n", slots_usage, busy_slots);
     busy_slots = slots_usage;
@@ -711,6 +744,8 @@ const char *jstate2string(enum Jobstate s) {
 }
 
 void s_list(int s, int ts_UID, enum ListFormat listFormat) {
+  s_update_slots_usage();
+
   struct Job *p;
   char *buffer;
   if (listFormat == DEFAULT) {
@@ -1764,7 +1799,7 @@ void s_job_info(int s, int jobid) {
   }
 
   {
-    double t_wall = p->wall_time * 3600.0; // to seconds
+    double t_wall = abs(p->wall_time) * 3600.0; // to seconds
     const char *unit = time_rep(&t_wall);
     fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
   }
@@ -2271,6 +2306,7 @@ void s_hold_job(int s, int jobid, int ts_UID) {
 }
 
 void s_cont_job(int s, int jobid, int ts_UID) {
+  s_update_slots_usage();
   if (user_max_slots[ts_UID] < 0) {
     snprintf(buff, 255, "Error: The owner `%s` is locked\n", user_name[ts_UID]);
     send_list_line(s, buff);
@@ -2318,7 +2354,8 @@ void s_cont_job(int s, int jobid, int ts_UID) {
       int num_slots = p->num_slots;
       if (user_busy[ts_UID] + num_slots <= user_max_slots[ts_UID] &&
           busy_slots + num_slots <= max_slots) {
-
+        
+        // PAUSE states
         if (config_running(p)) {
           printf("Cannot set Job %i as RUNNING", p->jobid);
         }
@@ -2330,9 +2367,10 @@ void s_cont_job(int s, int jobid, int ts_UID) {
       snprintf(buff, 255, "Error: cannot rerun job [%d]\n", jobid);
     }
   } // p->pid
-
+  p->wall_time = abs(p->wall_time);
   send_list_line(s, buff);
 }
+
 /* Don't complain, if the socket doesn't exist */
 void s_remove_notification(int s) {
   struct Notify *n;
