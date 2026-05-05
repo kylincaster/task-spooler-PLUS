@@ -103,7 +103,6 @@ void c_new_job() {
   m.u.newjob.taskset_flag = command_line.taskset_flag;
   
   
-  
   /* Send the message */
   send_msg(server_socket, &m);
 

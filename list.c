@@ -146,8 +146,15 @@ static char *print_noresult(const struct Job *p) {
       }
     }
   }
+
+  int is_timeout = 0;
   if (p->state == PAUSE && is_sleep(p->pid) == 1) {
-    jobstate = "pause  "; // TODO delete this
+    if (p->wall_time < 0) {
+      is_timeout = 1;
+      jobstate = "timeout"; // TODO delete this
+    } else {
+      jobstate = "pause  "; // TODO delete this
+    }
   }
 
   output_filename = ofilename_shown(p);
@@ -193,7 +200,7 @@ static char *print_noresult(const struct Job *p) {
     double runtime = get_cpu_time_by_pid(p->pid);
     // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
     int rate = (runtime*100.0) / real_ms;
-    if (rate < 80) {
+    if (rate < 80 && is_timeout == 0) {
       sprintf(buf, "%s %d%%", unit, rate);
     } else {
       sprintf(buf, "%s", unit);
@@ -207,7 +214,7 @@ static char *print_noresult(const struct Job *p) {
   cmd_len = max((strlen(p->command) + (term_width - maxlen)), 20);
   char *cmd = shorten(p->command + p->command_strip, cmd_len);
   if (p->label) {
-    char *label = shorten(p->label, 10);
+    char *label = shorten(p->label, 10); 
     snprintf(line, maxlen, "%-4i %-9s %-6i %-7s %-10s %6.2f%s  %-21s | %s\n",
              p->jobid, jobstate, p->num_slots, uname, label, real_ms, buf, cmd,
              output_filename);
@@ -348,7 +355,9 @@ static char *plainprint_noresult(const struct Job *p) {
     double runtime = get_cpu_time_by_pid(p->pid);
     // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
     int rate = (runtime*100.0) / real_ms;
-    if (rate < 80) {
+    int is_timeout = p->wall_time < 0;
+
+    if (rate < 80 && is_timeout == 0) {
       sprintf(buf, "%s %d%%", unit, rate);
     } else {
       sprintf(buf, "%s", unit);
@@ -413,7 +422,6 @@ static char *plainprint_result(const struct Job *p) {
   line = (char *)malloc(maxlen);
   if (line == NULL)
     error("Malloc for %i failed.\n", maxlen);
-
 
   snprintf(line, maxlen, "%i\t%s\t%d\t%s\t%s\t%i\t%.2f%s\t%s\t%s\t%s\n", 
     p->jobid, jobstate, p->num_slots, user_name[p->ts_UID], label,

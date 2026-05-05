@@ -370,27 +370,45 @@ struct Job *findjob(int jobid) {
   return NULL;
 }
 
-int s_check_timeout(struct Job* p) {
+static int check_timeout(struct Job* p) {
   // printf("check job %d\n", p->jobid);
-  if (p->state != RUNNING || p->pid == 0) { 
+  if (p->pid == 0) { 
     return 0;
   }
   
-  double wall_time = p->wall_time; // * 3600.0; // in hours
+  double wall_time = p->wall_time * 1.0; // * 3600.0; // in hours
   double cpu_time = get_cpu_time_by_pid(p->pid);
+  printf("Job[%d|pid:%d] is time-out %f vs %f hr\n", p->jobid, p->pid, wall_time, cpu_time);
   if (cpu_time <= wall_time || cpu_time < 10) {
     return 0;
   }
-  printf("Job[%d|pid:%d] is time-out %d hr\n", p->jobid, p->pid, p->wall_time);
   if (safe_pause_pid(p) == 0) {
     p->state = PAUSE;
     p->wall_time = -abs(p->wall_time)-300;
-    return 1;
   }
   return 1; // time-out
 }
 
+void s_check_timeout() {
+  struct Job* p_tail = NULL;
+  struct Job *p = &firstjob;
+  while (p->next != 0) {
+    struct Job* p_next = p->next;
+    if (p_next->state == RUNNING && check_timeout(p_next)) {
+      p->next = p_next->next;
+      // add to the top of p_tail
+      p_next->next = p_tail;
+      p_tail = p_next;
+    } else {
+      p = p->next;
+    }
+  }
+  p->next = p_tail;
+}
+
 int s_update_slots_usage() {
+  s_check_timeout();
+  
   int slots_usage = 0;
   struct Job *p;
   /* Show Queued or Running jobs */
@@ -399,15 +417,13 @@ int s_update_slots_usage() {
   for (int i = 0; i < user_number; i++) {
     user_busy[i] = user_jobs[i] = user_queue[i] = 0;
   }
-
+  
   while (p != 0) {
     int i = p->ts_UID;
     if (p->state == RUNNING) {
-      if (!s_check_timeout(p)) {
-        slots_usage += p->num_slots;
-        user_busy[i] += p->num_slots;
-        user_jobs[i]++;
-      }
+      slots_usage += p->num_slots;
+      user_busy[i] += p->num_slots;
+      user_jobs[i]++;
     } else {
       user_queue[i]++;
     }
@@ -479,6 +495,9 @@ int s_check_relink(int s, int pid, int ts_UID) {
     send_list_line(s, buff);
     return -1;
   }
+  
+  printf("is delink %d, %d\n", p->jobid, p->state == DELINK);
+  check_timeout(p);
   return job_tsUID;
 }
 
