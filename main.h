@@ -242,6 +242,7 @@ struct Job {
   int store_output;
   int pid;
   int ts_UID;
+  double walltime; /* wall-time limit */
   int should_keep_finished;
   int *depend_on;
   int depend_on_size;
@@ -568,6 +569,7 @@ int is_sleep(int pid);
 
 /* runtime_limit.c */
 double get_cpu_time_by_pid(int pid);
+double get_max_wall_time();
 
 /* jobs.c */
 void s_user_status_all(int s);
