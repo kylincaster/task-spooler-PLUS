@@ -415,7 +415,7 @@ void c_shutdown_server() {
 
   struct Msg m = default_msg();
   if (client_uid != 0) {
-    printf("Only the root can shutdown the ts server\n");
+    printf("Only the root can shutdown the task-spooler server\n");
     return;
   }
   char buf[10];
@@ -929,6 +929,46 @@ void c_show_label() {
 
   /* This will never be reached */
   return;
+}
+
+void c_add_wtime() {
+  struct Msg m = default_msg();
+  if (client_uid != 0) {
+    printf("Only the root can change the job's wall time!\n");
+    return;
+  }
+  int res;
+  char *string = 0;
+
+  /* Send the request */
+  m.type = ADD_WTIME;
+  m.jobid = command_line.jobid;
+  m.u.newjob.wall_time = command_line.wall_time;
+  send_msg(server_socket, &m);
+
+  /* Receive the answer */
+  res = recv_msg(server_socket, &m);
+  if (res != sizeof(m))
+    error("Error in get_label");
+
+  switch (m.type) {
+  case LIST_LINE:
+    string = (char *)malloc(m.u.size);
+    res = recv_bytes(server_socket, string, m.u.size);
+    if (res != m.u.size)
+      error("Error in c_extend_walltime() - line size");
+
+    printf("%s", string);
+    free(string);
+    return;
+  default:
+    warning("Wrong internal message in c_extend_walltime()");
+  }
+
+  /* This will never be reached */
+  return;
+
+
 }
 
 void c_show_cmd() {

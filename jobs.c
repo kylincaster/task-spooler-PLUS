@@ -376,15 +376,17 @@ static int check_timeout(struct Job* p) {
     return 0;
   }
   
-  double wall_time = p->wall_time * 1.0; // * 3600.0; // in hours
+  double wall_time = abs(p->wall_time) * 1.0; // 3600.0; // in hours
   double cpu_time = get_cpu_time_by_pid(p->pid);
-  printf("Job[%d|pid:%d] is time-out %f vs %f hr\n", p->jobid, p->pid, wall_time, cpu_time);
-  if (cpu_time <= wall_time || cpu_time < 10) {
+  if (cpu_time <= wall_time || cpu_time < 3) {
     return 0;
   }
+  
+  printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid, p->pid, cpu_time, wall_time);
   if (safe_pause_pid(p) == 0) {
+    p->wall_time = -abs(p->wall_time) - 24; // plus 24 hrs
+    insert_or_replace_DB(p, "Jobs"); // save as running
     p->state = PAUSE;
-    p->wall_time = -abs(p->wall_time)-300;
   }
   return 1; // time-out
 }
@@ -404,6 +406,27 @@ void s_check_timeout() {
     }
   }
   p->next = p_tail;
+
+  // update the timeout()
+  if (p_tail != NULL) {
+    
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(1);
+    }
+    if (pid == 0) {
+        // 子进程：重新执行自身
+        // printf("Child (%d) exec itself...\n", getpid());
+        char *argv[] = { "self", NULL };
+        sleep(1);
+        execv("/proc/self/exe", argv);
+        exit(1);
+    } else {
+        // wait(NULL);
+        printf("Refresh the jobs.\n");
+    }
+  }
 }
 
 int s_update_slots_usage() {
@@ -496,7 +519,7 @@ int s_check_relink(int s, int pid, int ts_UID) {
     return -1;
   }
   
-  printf("is delink %d, %d\n", p->jobid, p->state == DELINK);
+  // printf("is delink %d, %d\n", p->jobid, p->state == DELINK);
   check_timeout(p);
   return job_tsUID;
 }
@@ -640,6 +663,29 @@ void s_get_label(int s, int jobid) {
   send_list_line(s, label);
   if (p->label)
     free(label);
+}
+
+void s_add_wtime(int s, int jobid, int add_wtime) {
+  struct Job* p = findjob(jobid);
+
+  if (p == NULL) {
+    snprintf(buff, 255, "cannot find Job by id: %d\n", jobid);
+    send_list_line(s, buff);
+    return;
+  }
+  
+  int new_wtime = abs(p->wall_time) + add_wtime;
+  if (new_wtime <= 0) {
+    snprintf(buff, 255, "Error: [%d], negative wall-time after change from %d => %d\n", jobid, abs(p->wall_time), new_wtime);
+    send_list_line(s, buff);
+    return;
+  }
+  p->wall_time = (p->wall_time < 0) ? -new_wtime : new_wtime;
+
+  insert_or_replace_DB(p, "Jobs");
+  snprintf(buff, 255, "Set [%d] wall-time as %d hr\n", jobid, abs(p->wall_time));
+  send_list_line(s, buff);
+  printf("s_add_wtime(): %s", buff);
 }
 
 void s_send_cmd(int s, int jobid) {
@@ -1065,10 +1111,13 @@ int s_newjob(int s, struct Msg *m, int ts_UID) {
   p->depend_on_size = m->u.newjob.depend_on_size;
   p->depend_on = 0;
   p->taskset_flag = m->u.newjob.taskset_flag;
-  p->wall_time = get_max_wall_time();
-  // printf("wall time = %d\n", m->u.newjob.wall_time);
-  if (p->wall_time > m->u.newjob.wall_time) {
-    p->wall_time = m->u.newjob.wall_time;
+  
+  if (p->state != DELINK) {
+    p->wall_time = get_max_wall_time();
+    // printf("wall time = %d\n", m->u.newjob.wall_time);
+    if (p->wall_time > m->u.newjob.wall_time) {
+      p->wall_time = m->u.newjob.wall_time;
+    }
   }
   /* this error level here is used internally to decide whether a job should be
    * run or not so it only matters whether the error level is 0 or not. thus,
@@ -1550,7 +1599,7 @@ static void s_add_job(struct Job *j, struct Job **p) {
   // RELINK) {
   if (j->state == RUNNING) {
     if (j->pid > 0 && s_check_running_pid(j->pid) == 1) {
-      printf("add job %d\n", j->jobid);
+      // printf("add job %d\n", j->jobid);
 
       j->state = DELINK;
 
@@ -1610,7 +1659,7 @@ void s_read_sqlite() {
   num_jobs = read_jobid_DB(&(jobs_DB), "Jobs");
   // printf("read from jobs %d\n", num_jobs);
   // jobDB_Jobs = (struct Job**)malloc(sizeof(struct Job*) * num_jobs);
-  printf("Jobs:\n");
+  printf("Jobs: #%d\n", num_jobs);
   for (int i = 0; i < num_jobs; i++) {
     job = read_DB(jobs_DB[i], "Jobs");
     if (job == NULL) {

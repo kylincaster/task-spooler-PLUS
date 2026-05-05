@@ -54,6 +54,7 @@ enum MsgTypes {
   NEWJOB_PID_NOK,
   COUNT_RUNNING,
   GET_LABEL,
+  ADD_WTIME,
   LAST_ID,
   KILL_ALL,
   GET_CMD,
@@ -103,6 +104,7 @@ enum Request {
   c_KILL_JOB,
   c_COUNT_RUNNING,
   c_GET_LABEL,
+  c_ADD_WTIME,
   c_LAST_ID,
   c_KILL_ALL,
   c_SHOW_CMD,
@@ -332,6 +334,8 @@ void c_get_count_running();
 
 void c_show_label();
 
+void c_add_wtime();
+
 void c_kill_all_jobs();
 
 void c_show_cmd();
@@ -413,6 +417,8 @@ int job_is_holding_client(int jobid);
 int wake_hold_client();
 
 void s_get_label(int s, int jobid);
+
+void s_add_wtime(int s, int jobid, int add_wtime);
 
 void s_kill_all_jobs(int s, int ts_UID);
 

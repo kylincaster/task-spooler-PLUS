@@ -163,6 +163,7 @@ int strtok_int(char *str, char *delim, int *ids) {
 
 static struct option longOptions[] = {
     {"get_label", required_argument, NULL, 'a'},
+    {"add_wtime", required_argument, NULL, 0},
     {"count_running", no_argument, NULL, 'R'},
     {"help", no_argument, NULL, 0},
     {"serialize", required_argument, NULL, 'M'},
@@ -223,6 +224,15 @@ void parse_opts(int argc, char **argv) {
       } else if (strcmp(longOptions[optionIdx].name, "get_label") == 0) {
         command_line.request = c_GET_LABEL;
         command_line.jobid = str2int(optarg);
+      } else if (strcmp(longOptions[optionIdx].name, "add_wtime") == 0) {
+        command_line.request = c_ADD_WTIME;
+        int jobid, add_wtime;
+        int n = sscanf(optarg, "%d,%d", &jobid, &add_wtime);
+        if (n != 2) {
+          error("Invalid formt for add_wtime %s\n, it should be --add_wtime jobid,add-wtime", optarg);
+        }
+        command_line.jobid = jobid;
+        command_line.wall_time = add_wtime;
       } else if (strcmp(longOptions[optionIdx].name, "hold") == 0) {
         command_line.request = c_HOLD_JOB;
         command_line.jobid = str2int(optarg);
@@ -657,6 +667,7 @@ static void print_help(const char *cmd) {
   printf("  --no-taskset                    Disable taskset\n");
   printf("  --job [joibid] || -J [joibid]   Assign/relink job ID\n");
   printf("  --wtime [walltime]              Wall time limit in hours (will be clamped to system maximum if exceeded).\n");
+  printf("  --add-wtime <jobid,ADD_time>    Increase job wall time by ADD_time (root only)\n");
   printf("  --daemon                        Run as daemon (root only)\n");
 
   // printf("  --stime [start_time]            Set the relinked task by starting
@@ -757,9 +768,8 @@ int main(int argc, char **argv) {
       c_refresh_user();
       c_wait_server_lines();
     } else {
-      printf("Only the root can shutdown the task-spooler server\n");
+      printf("Only the root can refresh the task-spooler user configurations\n");
     }
-
     break;
   case c_DAEMON:
     break;
@@ -918,6 +928,9 @@ int main(int argc, char **argv) {
     if (!command_line.need_server)
       error("The command %i needs the server", command_line.request);
     c_show_label();
+    break;
+  case c_ADD_WTIME:
+    c_add_wtime();
     break;
   case c_SHOW_CMD:
     if (!command_line.need_server)
