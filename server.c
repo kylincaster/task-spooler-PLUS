@@ -658,6 +658,12 @@ static enum Break client_read(int index) {
   case GET_LABEL:
     s_get_label(s, m.jobid);
     break;
+  case ADD_WTIME:
+    if (ts_UID == 0) {
+      s_add_wtime(s, m.jobid, m.u.newjob.wall_time);
+    }
+    close(s);
+    remove_connection(index);
   case GET_CMD:
     s_send_cmd(s, m.jobid);
     break;

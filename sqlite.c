@@ -111,7 +111,7 @@ int open_sqlite() {
       "NULL, "
       "user_ms FLOAT NOT NULL, system_ms FLOAT NOT NULL, real_ms FLOAT NOT "
       "NULL, skipped INT NOT NULL, "
-      "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, "
+      "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
       "NULL, "
       "enqueue_time_ms INT NOT NULL, start_time_ms INT NOT NULL, end_time_ms "
@@ -151,7 +151,7 @@ int open_sqlite() {
       "NULL, "
       "user_ms FLOAT NOT NULL, system_ms FLOAT NOT NULL, real_ms FLOAT NOT "
       "NULL, skipped INT NOT NULL, "
-      "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, "
+      "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
       "NULL, "
       "enqueue_time_ms INT NOT NULL, start_time_ms INT NOT NULL, end_time_ms "
@@ -245,13 +245,13 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       "notify_errorlevel_to, notify_errorlevel_to_size, "
       "dependency_errorlevel,label,email,num_slots,errorlevel,died_by_signal,"
       "signal,user_ms,system_ms,real_ms,skipped,"
-      "ptr,nchars,allocchars,"
+      "ptr,nchars,allocchars,wall_time,"
       "enqueue_time,start_time,end_time,"
       "enqueue_time_ms,start_time_ms,end_time_ms, "
       "order_id, command_strip, work_dir)"
       "VALUES (%d,'%s',%d,'%s',%d,%d,%d,%d,'%s',%d,'%s',%d,%d,'%s','%s',%d,"
       "%d,%d,%d,%f,%f,%f,%d,"
-      "'%s',%d,%d,'%ld','%ld','%ld','%ld','%ld','%ld', "
+      "'%s',%d,%d,%d,'%ld','%ld','%ld','%ld','%ld','%ld', "
       "%d, %d,'%s');",
       action, table, job->jobid, job->command, job->state, job->output_filename,
       job->store_output, job->pid, job->ts_UID, job->should_keep_finished,
@@ -260,7 +260,7 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       job->dependency_errorlevel, label, email, job->num_slots,
       result->errorlevel, result->died_by_signal, result->signal,
       result->user_ms, result->system_ms, result->real_ms, result->skipped,
-      info->ptr, info->nchars, info->allocchars, info->enqueue_time.tv_sec,
+      info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time.tv_sec,
       info->start_time.tv_sec, info->end_time.tv_sec,
       info->enqueue_time.tv_usec, info->start_time.tv_usec,
       info->end_time.tv_usec, order_id, job->command_strip, job->work_dir);
@@ -479,16 +479,17 @@ struct Job *read_DB(int jobid, const char *table) {
     info->nchars = sqlite3_column_bytes(stmt, 24) / sizeof(char);
     info->allocchars = sqlite3_column_bytes(stmt, 25) / sizeof(char);
 
-    info->enqueue_time.tv_sec = sqlite3_column_int64(stmt, 26);
-    info->start_time.tv_sec = sqlite3_column_int64(stmt, 27);
-    info->end_time.tv_sec = sqlite3_column_int64(stmt, 28);
+    job->wall_time = sqlite3_column_int(stmt, 26);
+    info->enqueue_time.tv_sec = sqlite3_column_int64(stmt, 27);
+    info->start_time.tv_sec = sqlite3_column_int64(stmt, 28);
+    info->end_time.tv_sec = sqlite3_column_int64(stmt, 29);
 
-    info->enqueue_time.tv_usec = sqlite3_column_int64(stmt, 29);
-    info->start_time.tv_usec = sqlite3_column_int64(stmt, 30);
-    info->end_time.tv_usec = sqlite3_column_int64(stmt, 31);
-    job->command_strip = sqlite3_column_int(stmt, 33);
+    info->enqueue_time.tv_usec = sqlite3_column_int64(stmt, 30);
+    info->start_time.tv_usec = sqlite3_column_int64(stmt, 31);
+    info->end_time.tv_usec = sqlite3_column_int64(stmt, 32);
+    job->command_strip = sqlite3_column_int(stmt, 34);
 
-    strcpy(sql, (const char *)sqlite3_column_text(stmt, 34));
+    strcpy(sql, (const char *)sqlite3_column_text(stmt, 35));
     copy_with_nullcheck(&(job->work_dir), sql);
 
   } else {
