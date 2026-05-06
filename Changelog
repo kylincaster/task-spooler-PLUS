@@ -11,6 +11,21 @@ Doubtful tasks:
 Future:
  - Use a better system than mkstemp() for finding output files, so we can add
    .gz to the gzipped outputs.
+v2.1.2:
+ - 新增了普通用户的默认最大运行时间限制：
+   作业一旦超时将被暂停并移动到队列末尾，在有空闲资源时可从队尾重新启动。
+   最大运行时间可在`default.inc`中通过`DEFAULT_MAX_WALL_TIME`设置（默认 168 小时，即 7 天），或在启动时通过 TS_MAX_WALL_TIME 指定。
+   客户端可使用 --wtime <time>（单位：小时）设置作业运行时间，但不得超过该最大值；
+   每次超时后，作业会被放回队尾并额外增加 24 小时运行时间。
+   root 用户可通过 --add_wtime <jobid,extra_time> 为指定作业追加运行时间。
+
+ - v2.1.2 introduces a default maximum wall-time limit for regular users: 
+   when a job exceeds its time limit, it is paused and moved to the end of the queue, and may resume from the tail when resources become available.
+   The maximum wall time can be configured via `DEFAULT_MAX_WALL_TIME` in `default.inc` (default: 168 hours / 7 days) or set at startup using TS_MAX_WALL_TIME.
+   Users can specify job runtime with --wtime <time> (in hours), which must not exceed the maximum. 
+   After each timeout, the job is re-queued at the end with an additional 24 hours of wall time.
+   Root users can extend a job’s time using --add_wtime <jobid,extra_time>.
+
 v1.0:
  - Respect TMPDIR for output files.
 v0.7.6:
