@@ -140,7 +140,6 @@ struct CommandLine {
   char *email;
   char *logfile;
   char *outfile;
-  int taskset_flag;
   int num_slots;      /* Slots for the job to use. Default 1 */
   int taskpid;       /* to restore task by pid */
   int require_elevel; /* whether requires error level of dependencies or not */
@@ -191,7 +190,6 @@ struct Msg {
       int taskpid;
       long start_time;
       int wall_time;
-      int taskset_flag;
     } newjob;
     struct {
       int ofilename_size;
@@ -253,15 +251,11 @@ struct Job {
   int *notify_errorlevel_to;
   int notify_errorlevel_to_size;
   int dependency_errorlevel;
-  int taskset_flag;
   char *label;
   char *email;
   struct Procinfo info;
   int num_slots;
   int num_allocated;
-#ifdef TASKSET
-  char* cores;
-#endif
 };
 
 enum ExitCodes {
@@ -635,8 +629,3 @@ int set_state_DB(int jobid, int state);
 char* ints_to_chars(int n, int *array, const char *delim);
 int*  chars_to_ints(int *size, char* str, const char* delim);
 char* insert_chars_check(int pos, const char* input, const char* c);
-
-/* taskset.c */
-void init_taskset();
-int set_task_cores(struct Job* p);
-void unlock_core_by_job(struct Job* p);

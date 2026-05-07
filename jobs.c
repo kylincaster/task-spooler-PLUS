@@ -136,9 +136,6 @@ static void destroy_job(struct Job *p) {
         pinfo_free(&p->info);
         free(p->depend_on);
         free(p->label);
-#ifdef TASKSET
-        free(p->cores);
-#endif
         free(p);
     }
 }
@@ -153,20 +150,12 @@ static void free_cores(struct Job *p) {
     p->num_allocated = 0;
     // user_queue[ts_UID]--;
     user_jobs[ts_UID]--;
-#ifdef TASKSET
-    unlock_core_by_job(p);
-#endif
 }
 
 static int config_running(struct Job *p) {
     if (p == NULL || (p->state != PAUSE && p->state != QUEUED)) {
         return 1;
     }
-
-#ifdef TASKSET
-    set_task_cores(p);
-#endif
-
     if (is_sleep(p->pid)) {
         kill_pids(p->pid, SIGCONT, NULL);
     }
@@ -387,7 +376,7 @@ static int check_timeout(struct Job *p) {
         return 0;
     }
 
-    double wall_time = abs(p->wall_time) * 3600.0; // 3600.0; // in hours
+    double wall_time = abs(p->wall_time) * 60.0; // minuts -> seconds
     double cpu_time = get_cpu_time_by_pid(p->pid);
     if (cpu_time <= wall_time || cpu_time < 3) {
         return 0;
@@ -396,7 +385,7 @@ static int check_timeout(struct Job *p) {
     printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid,
            p->pid, cpu_time, wall_time);
     if (safe_pause_pid(p) == 0) {
-        p->wall_time = -abs(p->wall_time) - 24; // plus 24 hrs
+        p->wall_time = -abs(p->wall_time) - 1440; // plus 24 hrs
         insert_or_replace_DB(p, "Jobs");        // save as running
         p->state = PAUSE;
     }
@@ -1008,11 +997,6 @@ static struct Job *newjobptr() {
     }
 
     p->next = (struct Job *)calloc(sizeof(struct Job), sizeof(char));
-#ifdef TASKSET
-    p->next->taskset_flag = 1;
-#else
-    p->next->taskset_flag = 0;
-#endif
     /*
     p->next->next = 0;
     p->next->output_filename = 0;
@@ -1023,10 +1007,6 @@ static struct Job *newjobptr() {
     p->next->depend_on = NULL;
     p->next->notify_errorlevel_to = NULL;
     p->result.errorlevel = 0;
-    #ifdef TASKSET
-    p->next->cores = NULL;
-    #endif
-
 
     struct Procinfo* info= &(p->next->info);
     info->enqueue_time.tv_sec  = 0;
@@ -1130,7 +1110,6 @@ int s_newjob(int s, struct Msg *m, int ts_UID) {
     p->notify_errorlevel_to_size = 0;
     p->depend_on_size = m->u.newjob.depend_on_size;
     p->depend_on = 0;
-    p->taskset_flag = m->u.newjob.taskset_flag;
 
     if (p->state != DELINK) {
         p->wall_time = get_max_wall_time();
@@ -1458,7 +1437,7 @@ int next_run_job() {
                 }
         } else if (p->state == PAUSE && p->wall_time < 0) {
           double cpu_time = get_cpu_time_by_pid(p->pid);
-          double wall_time = abs(p->wall_time) * 3600;
+          double wall_time = abs(p->wall_time) * 60; // minuts -> seconds
           if (wall_time > cpu_time) {
             int num_slots = p->num_slots, id = p->ts_UID;
             if (id == uid && free_slots >= num_slots &&
@@ -1516,10 +1495,6 @@ static void new_finished_job(struct Job *j) {
     if (err == 0) {
         delete_DB(j->jobid, "Jobs");
     }
-
-#ifdef TASKSET
-    unlock_core_by_job(j);
-#endif
     sound_notify(j);
     send_mail_via_ssmtp(j);
 }
@@ -1926,17 +1901,7 @@ void s_job_info(int s, int jobid) {
     fd_nprintf(s, 100, "State: %9s PID: %-6d%s\n", jstate2string(p->state),
                p->pid, status);
 
-#ifdef TASKSET
-    if (p->cores != NULL) {
-        int buffer_len = strlen(p->cores) + 100;
-        fd_nprintf(s, buffer_len, "Slots: %-3d       Taskset: %s\n",
-                   p->num_slots, p->cores);
-    } else {
-        fd_nprintf(s, 100, "Slots: %-3d\n", p->num_slots);
-    }
-#else
     fd_nprintf(s, 100, "Slots: %-3d\n", p->num_slots);
-#endif
     if (p->output_filename != NULL) {
         int slen = strlen(p->output_filename) + 30;
         fd_nprintf(s, slen, "Ouput: %s\n", p->output_filename);
@@ -1951,7 +1916,7 @@ void s_job_info(int s, int jobid) {
     }
 
     {
-        double t_wall = abs(p->wall_time) * 3600.0; // to seconds
+        double t_wall = abs(p->wall_time) * 60.0; // minuts -> seconds
         char const *unit = time_rep(&t_wall);
         fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
     }
