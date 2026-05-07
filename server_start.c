@@ -121,7 +121,7 @@ static void server_info() {
   printf("  Read user file from %s  [TS_USER_PATH]\n", get_user_path());
   printf("  Write log file to %s    [TS_LOGFILE_PATH]\n", set_server_logfile());
   printf("  Sqlite Database @ %s    [TS_SQLITE_PATH]\n", get_sqlite_path());
-  printf("  Max_Wall_Time: %.2f hr          [TS_MAX_WALL_TIME]\n", get_max_wall_time());
+  printf("  Max_Wall_Time: %.2f hr  [TS_MAX_WALL_TIME]\n", get_max_wall_time()/60.0);
 }
 
 static void server_daemon() {

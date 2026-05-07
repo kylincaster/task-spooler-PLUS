@@ -6,7 +6,7 @@ This project builds upon [Task Spooler by Lluís Batlle i Rossell](https://vicer
 
 As a computer scientist, I frequently need to submit multiple—sometimes dozens—of simulation tasks on my personal workstations while sharing computational resources with other users. I initially experimented with the original <u>task-spooler</u> software, but it lacked multi-user support, as each user maintained an independent task queue. To address this limitation, I modified the software and developed <u>task-spooler-PLUS</u>, enabling support for multiple users.
 
-More recently, I introduced two key enhancements: **fatal crash recovery and processor binding**. In the event of a fatal crash, <u>task-spooler-PLUS</u> utilizes *SQLite3* to restore all tasks, including those that were running, queued, or completed. Additionally, processor binding is implemented via the *taskset* command, allowing for more efficient resource allocation. Unlike the original version, <u>task-spooler-PLUS</u> operates as a background service and **requires root privileges.**
+More recently, I introduced two key enhancements: **fatal crash recovery and processor binding**. In the event of a fatal crash, <u>task-spooler-PLUS</u> utilizes *SQLite3* to restore all tasks, including those that were running, queued, or completed. Unlike the original version, <u>task-spooler-PLUS</u> operates as a background service and **requires root privileges.**
 
 ### Changelog
 
@@ -18,9 +18,10 @@ I have enhanced <u>task-spooler</u> to support task execution on my workstation 
 
 - **Cross-platform task queue management** for GNU/Linux, Darwin, Cygwin, and FreeBSD
 - **Multi-user support** with customizable limits on maximum processor usage
-- **Fatal crash recovery**, ensuring task persistence by logging data to an *SQLite3* database
+- **Fatal crash recovery** ensuring task persistence by logging data to an *SQLite3* database
+- **Wall-time management** auto-requeue for timed-out tasks in the tail of queue for the deferred execution.
 - **Pause and resume functionality** for any running or queued task
-- **Global control** to stop or resume all tasks for a single user
+- **Global control** to pause or resume all tasks for a single user
 - **Comprehensive information output**, available in default, JSON, and tab-separated formats
 - **Simple installation and configuration** for ease of use
 - **Optional separation of stdout and stderr** for better log management
@@ -32,8 +33,6 @@ Simple run the provided script
 ```
 ./make
 ```
-if you need the **taskset** processors binding feature, try to add`-DTASKSET` option of `CFLAGS`.
-
 **The default positions** of log file and database is defined in `default.inc`.
 
 ```c
@@ -44,6 +43,7 @@ if you need the **taskset** processors binding feature, try to add`-DTASKSET` op
 #define DEFAULT_EMAIL_TIME 45.0
 #define DEFAULT_USER_LOCK_TIME 30
 #define DEFAULT_ROOT_LOCK_TIME 86400
+#define DEFAULT_MAX_WALL_TIME 10080 // in minutes
 #define DEFAULT_HPC_NAME "intel_laptop"
 
 enum { MAXCONN = 1000 };
@@ -55,42 +55,6 @@ enum { DEFAULT_MAXFINISHED = 1000 };
 ```
 
 You can specific the positions by the environment variables `TS_USER_PATH`, `TS_LOGFILE_PATH`, and `TS_SQLITE_PATH`, respectively on the invoking of daemon server. Otherwise, you could specify the positions in the `user_config` file.
-
-
-
-In `taskset.c`, **the processor binding sequence** is determined by three variables: `MAX_CORE_NUM`,`MAX_CORE_NUM_HALF`, and `MAX_CORE_NUM_QUAD`.
-
-​	`MAX_CORE_NUM` represents the total number of processors available on the system.
-
-For a personal laptop with **two CPUs**, each equipped with **four physical cores** and **eight logical processors** via Hyper-Threading, the optimal configuration would be:
-
-```
-#define MAX_CORE_NUM 16
-#define MAX_CORE_NUM_HALF 8
-#define MAX_CORE_NUM_QUAD 4
-```
-
-For a AMD workstation with 2 CPU, 128 cores and 256 logical processors. The configuration would be:
-
-```
-#define MAX_CORE_NUM 256
-#define MAX_CORE_NUM_HALF 128
-#define MAX_CORE_NUM_QUAD 64
-```
-
-For a Intel workstation with 2 CPU, 128 cores and 128 logical processors. The configuration would be:
-
-```
-#define MAX_CORE_NUM 128
-#define MAX_CORE_NUM_HALF 128
-#define MAX_CORE_NUM_QUAD 64
-```
-
-For the other hardware, the sequence of the processors could be specific manually as:
-
-```
-static int core_id[MAX_CORE_NUM] = {0, 4, 1, 5, 2, 6, 3, 7}
-```
 
 
 
@@ -144,7 +108,7 @@ Eric Keller wrote a nodejs web server showing the status of the task spooler que
 
 Duc Nguyen took the project and develops a GPU-support version.
 
-Kylin wrote the multiple user support, fatal crush recovery through Sqlite3 database and processing binding via taskset
+Kylin wrote the multiple user support, fatal crush recovery through Sqlite3 database.
 
 ## Manual
 
@@ -170,6 +134,7 @@ Environment Variables:
   TS_SQLITE_PATH   : SQLite DB path for logs (server start)
   TS_FIRST_JOBID   : Initial job ID (server start, default: 1000)
   TS_SORTJOBS      : Job queue sorting control (server start)
+  TS_MAX_WALL_TIME : Max job wall-time in hours, (server start, default: 10080 minutes or 7.0 days)
   TMPDIR           : Temporary Output files directory
 
 Long option actions:
@@ -194,8 +159,9 @@ Long option actions:
   --lock                          Lock server (5 sec. timeout; root has no timeout)
   --unlock                        Release server lock
   --relink [PID]                  Reconnect tasks after unexpected failures
-  --no-taskset                    Disable taskset
   --job [joibid] || -J [joibid]   Assign/relink job ID
+  --wtime [walltime]              Wall time limit in minutes (will be clamped to system maximum if exceeded).
+  --add-wtime <jobid,ADD_time>    Increase job wall time by ADD_time in minutes (root only)
   --daemon                        Run as daemon (root only)
 
 Actions:

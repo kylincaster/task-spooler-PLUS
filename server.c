@@ -268,7 +268,6 @@ void server_main(int notify_fd, char *_path) {
   }
   // jobDB_num = jobDB_wait_num = 0;
   // jobDB_Jobs = NULL;
-  init_taskset();
   set_server_logfile();
   setup_ssmtp();
   // int jobid = read_first_jobid_from_logfile(logfile_path);

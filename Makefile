@@ -3,7 +3,7 @@ PREFIX?=/usr/local
 PREFIX_LOCAL=~
 GLIBCFLAGS=#-D_XOPEN_SOURCE=500 -D__STRICT_ANSI__
 CPPFLAGS+=$(GLIBCFLAGS)
-CFLAGS?=-pedantic -ansi -Wall -g -std=gnu11 -fcommon -Wno-format-truncation # -DTASKSET -DSOUND 
+CFLAGS?=-pedantic -ansi -Wall -g -std=gnu11 -fcommon -Wno-format-truncation # -DSOUND 
 OBJECTS=main.o \
 	server.o \
 	server_start.o \
@@ -23,8 +23,7 @@ OBJECTS=main.o \
 	user.o \
 	cJSON.o \
 	sqlite.o \
-	runtime_limit.o \
-	taskset.o
+	runtime_limit.o
 
 TARGET=ts
 INSTALL=install -c
@@ -59,8 +58,7 @@ signals.o: signals.c main.h
 list.o: list.c main.h
 tail.o: tail.c main.h
 cJSON.o: cjson/cJSON.c cjson/cJSON.h
-sqlite.o: sqlite.c main.h
-taskset.o: taskset.c main.h
+runtime_limit.o: runtime_limit.c main.h
 cJSON.o : cjson/cJSON.c cjson/cJSON.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
