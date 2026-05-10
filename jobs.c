@@ -159,7 +159,7 @@ static int config_running(struct Job *p) {
     if (is_sleep(p->pid)) {
         kill_pids(p->pid, SIGCONT, NULL);
     }
-
+    printf("start job[%d]: PID: %d\n", p->jobid, p->pid);
     int ts_UID = p->ts_UID;
     user_busy[ts_UID] += p->num_slots;
     busy_slots += p->num_slots;
@@ -392,7 +392,7 @@ static int check_timeout(struct Job *p) {
     return 1; // time-out
 }
 
-void s_check_timeout() {
+static int s_check_timeout() {
     struct Job *p_tail = NULL;
     struct Job *p = &firstjob;
     while (p->next != 0) {
@@ -408,29 +408,12 @@ void s_check_timeout() {
     }
     p->next = p_tail;
 
-    // update the timeout()
-    if (p_tail != NULL) {
-        pid_t pid = fork();
-        if (pid < 0) {
-            perror("fork");
-            exit(1);
-        }
-        if (pid == 0) {
-            // 子进程：重新执行自身
-            // printf("Child (%d) exec itself...\n", getpid());
-            char *argv[] = {"self", NULL};
-            sleep(1);
-            execv("/proc/self/exe", argv);
-            exit(1);
-        } else {
-            // wait(NULL);
-            printf("Refresh the jobs.\n");
-        }
-    }
+
+    return p_tail != NULL;
 }
 
 int s_update_slots_usage() {
-    s_check_timeout();
+    int new_job_flag = s_check_timeout();
 
     int slots_usage = 0;
     struct Job *p;
@@ -456,6 +439,9 @@ int s_update_slots_usage() {
     if (slots_usage != busy_slots) {
         printf("Error: invalid slots: %d vs %d\n", slots_usage, busy_slots);
         busy_slots = slots_usage;
+    }
+    if (new_job_flag) {
+        next_run_job();
     }
     return slots_usage;
 }
