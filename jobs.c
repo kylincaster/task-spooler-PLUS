@@ -5,20 +5,23 @@
     Please find the license in the provided COPYING file.
 */
 #define _DEFAULT_SOURCE
-#include "cjson/cJSON.h"
-#include "default.inc"
-#include "main.h"
-#include "user.h"
 #include <assert.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
+
+#include "cjson/cJSON.h"
+
+#include "default.inc"
+#include "main.h"
+#include "user.h"
 
 /* The list will access them */
 int busy_slots = 0;
@@ -413,7 +416,7 @@ static int s_check_timeout() {
 }
 
 int s_update_slots_usage() {
-    int new_job_flag = s_check_timeout();
+    int timeout_flag = s_check_timeout();
 
     int slots_usage = 0;
     struct Job *p;
@@ -440,7 +443,7 @@ int s_update_slots_usage() {
         printf("Error: invalid slots: %d vs %d\n", slots_usage, busy_slots);
         busy_slots = slots_usage;
     }
-    if (new_job_flag) {
+    if (timeout_flag) {
         next_run_job();
     }
     return slots_usage;
@@ -463,12 +466,20 @@ static struct Job *job_by_pid(int pid) {
 
 // return 1 for running, other is dead
 int s_check_running_pid(int pid) {
-    // char cmd[256], filename[256] = "";
-    // snprintf(cmd, sizeof(cmd), "readlink -f /proc/%d/fd/1", pid);
-    // linux_cmd(cmd, filename, sizeof(filename));
-    int res = kill(pid, 0);
-    // printf("res = %d\n", res);
-    return res == 0;
+    if (pid <= 0) {
+        return 0;
+    }
+
+    // kill(pid, 0) 不真正发送信号
+    if (kill(pid, 0) == 0) {
+        return 1;
+    }
+
+    // EPERM 说明进程存在但无权限
+    if (errno == EPERM) {
+        return 1;
+    }
+    return 0;
 }
 
 // if any error return non-0;
@@ -745,8 +756,7 @@ static char *get_ofile_from_FD(int pid) {
 }
 
 void s_mark_job_running(int jobid) {
-    struct Job *p;
-    p = findjob(jobid);
+    struct Job *p = findjob(jobid);
     if (!p) {
         error("Cannot mark the jobid %i RUNNING.", jobid);
     }
@@ -1480,6 +1490,7 @@ static void new_finished_job(struct Job *j) {
     int err = insert_DB(j, "Finished");
     if (err == 0) {
         delete_DB(j->jobid, "Jobs");
+        cgroups_clean_job(j);
     }
     sound_notify(j);
     send_mail_via_ssmtp(j);
@@ -1765,9 +1776,8 @@ void s_check_holdon() {
 
 // run the jobs
 void s_process_runjob_ok(int jobid, char *oname, int pid) {
-    struct Job *p;
-    p = findjob(jobid);
-    if (p == 0) {
+    struct Job *p = findjob(jobid);
+    if (p == NULL) {
         error("Job %i already run not found on runjob_ok", jobid);
     }
     if (p->state == PAUSE) {
@@ -1778,6 +1788,7 @@ void s_process_runjob_ok(int jobid, char *oname, int pid) {
     }
 
     p->pid = pid;
+    cgroups_create_job(p);
     if (oname != NULL && strlen(oname) != 0) {
         p->output_filename = oname;
     }
