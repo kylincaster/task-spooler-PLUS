@@ -573,6 +573,11 @@ int is_sleep(int pid);
 double get_cpu_time_by_pid(int pid);
 double get_max_wall_time();
 
+/* cgroups.c */
+void cgroups_create_job(const struct Job *p);
+void cgroups_clean_job(const struct Job *p);
+void cgroups_clean_all_finished();
+
 /* jobs.c */
 void s_user_status_all(int s);
 void s_user_status(int s, int i);

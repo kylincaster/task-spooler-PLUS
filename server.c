@@ -279,6 +279,7 @@ void server_main(int notify_fd, char *_path) {
   set_default_maxslots();
 
   initialize_log_dir();
+  cgroups_clean_all_finished();
 
   if (notify_fd != 0)
     notify_parent(notify_fd);
