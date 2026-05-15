@@ -35,10 +35,7 @@ static int max(int a, int b) {
 }
 
 static void tail_error(const char *str) {
-    fprintf(stderr, "%s", str);
-    fprintf(stderr, ". errno: %i (%s)\n",
-            errno, strerror(errno));
-    exit(-1);
+    error("%s .errno %i (%s)\n", str, errno, strerror(errno));
 }
 
 static void seek_at_last_lines(int fd, int lines) {

@@ -247,10 +247,10 @@ static void run_gzip(int fd_out, int fd_in) {
     /* Without stderr */
     close(2);
     execlp("gzip", "gzip", NULL);
-    exit(-1);
+    exit(EXIT_FAILURE);
     /* Won't return */
   case -1:
-    exit(-1); /* Fork error */
+    exit(EXIT_FAILURE); /* Fork error */
   default:
     close(fd_in);
     close(fd_out);
@@ -406,7 +406,7 @@ int run_job(int jobid, struct Result *res) {
      * works. Thus, command exists, etc. */
     fprintf(stderr, "ts could not run the command\n");
     // free((char *)tmpdir);
-    exit(-1);
+    exit(EXIT_FAILURE);
     /* To avoid a compiler warning */
     errorlevel = 0;
     break;

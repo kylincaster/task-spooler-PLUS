@@ -34,21 +34,21 @@ static int cg_write(char const *path, char const *fmt, ...) {
     va_end(ap);
 
     if (len < 0) {
-        fprintf(stderr, "vsnprintf failed\n");
+        fprintf(stderr, "Error: vsnprintf failed\n");
         return -1;
     }
 
     int fd = open(path, O_WRONLY);
 
     if (fd < 0) {
-        fprintf(stderr, "open %s failed: %s\n", path, strerror(errno));
+        fprintf(stderr, "Error: open %s failed: %s\n", path, strerror(errno));
         return -1;
     }
 
     ssize_t ret = write(fd, buf, len);
 
     if (ret != len) {
-        fprintf(stderr, "write %s failed: %s\n", path, strerror(errno));
+        fprintf(stderr, "Error: write %s failed: %s\n", path, strerror(errno));
 
         close(fd);
         return -1;
@@ -67,7 +67,7 @@ static int cg_write(char const *path, char const *fmt, ...) {
  */
 static int cg_mkdir(char const *path) {
     if (mkdir(path, 0755) != 0 && errno != EEXIST) {
-        fprintf(stderr, "cg_mkdir: failed to create %s: %s\n", path,
+        fprintf(stderr, "Error: failed to create %s: %s\n in cg_mkdir()", path,
                 strerror(errno));
         return -1;
     }
@@ -145,7 +145,7 @@ static int cgroup_v1_cleanup(const char *group) {
         FILE *fp = fopen(procs_path, "r");
 
         if (!fp) {
-            fprintf(stderr, "open %s failed: %s\n", procs_path,
+            fprintf(stderr, "Error: open %s failed: %s\n", procs_path,
                     strerror(errno));
             break;
         }
@@ -163,7 +163,7 @@ static int cgroup_v1_cleanup(const char *group) {
             if (kill(pid, SIGKILL) != 0) {
                 // ESRCH = 已不存在
                 if (errno != ESRCH) {
-                    fprintf(stderr, "kill(%d) failed: %s\n", pid,
+                    fprintf(stderr, "Error: kill(%d) failed: %s\n", pid,
                             strerror(errno));
                 }
             }
@@ -192,7 +192,7 @@ static int cgroup_v1_cleanup(const char *group) {
 
     // 最后删除 cgroup
     if (rmdir(path) != 0) {
-        fprintf(stderr, "rmdir %s failed: %s\n", path, strerror(errno));
+        fprintf(stderr, "Error: rmdir %s failed: %s\n", path, strerror(errno));
         return -1;
     }
 
@@ -202,7 +202,7 @@ static int cgroup_v1_cleanup(const char *group) {
 void cgroup_v1_clean_folder(char const *spool_dir) {
     DIR *dir = opendir(spool_dir);
     if (!dir) {
-        fprintf(stderr, "cannot open dir %s: %s\n", spool_dir, strerror(errno));
+        fprintf(stderr, "Error: cannot open dir %s: %s\n", spool_dir, strerror(errno));
         return;
     }
     struct dirent *ent;

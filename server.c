@@ -104,7 +104,7 @@ static void sigterm_handler(int n) {
 
   /* path will be initialized for sure, before installing the handler */
   unlink(path);
-  exit(1);
+  exit(EXIT_FAILURE); // sig = 1
 }
 
 static void set_default_maxslots() {

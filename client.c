@@ -144,7 +144,7 @@ int c_wait_newjob_ok() {
   if (res == -1)
     error("Error in wait_newjob_ok");
   if (m.type == NEWJOB_NOK) {
-    fprintf(stderr, "Error, queue full or conflict jobid\n");
+    fprintf(stderr, "Error: queue full or conflict jobid\n");
     exit(EXITCODE_QUEUE_FULL);
   }
 
@@ -154,11 +154,11 @@ int c_wait_newjob_ok() {
   }
 
   if (m.type == NEWJOB_PID_NOK) {
-    // fprintf(stderr, "Error, queue full\n");
+    fprintf(stderr, "Error: queue full\n");
     exit(EXITCODE_RELINK_FAILED);
   }
   if (m.type != NEWJOB_OK)
-    error("Error getting the newjob_ok");
+    error("Error: the return type is not NEWJOB_OK");
   
   return m.jobid;
 }
@@ -479,11 +479,10 @@ static char *get_output_file(int *pid) {
   case LIST_LINE: /* Only ONE line accepted */
     string = (char *)malloc(m.u.size);
     res = recv_bytes(server_socket, string, m.u.size);
-    if (res != m.u.size)
+    if (res != m.u.size) {
       error("Error in get_output_file line size");
-    fprintf(stderr, "Error in the request: %s", string);
-    free(string);
-    exit(-1);
+    }
+    error("Error: in the request: %s", string);
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in get_output_file line size");
@@ -494,15 +493,7 @@ static char *get_output_file(int *pid) {
 
 void c_hold_job(int jobid) {
   /* This will exit if there is any error */
-  /*
-  int pid = 0;
-  get_output_file(&pid);
 
-  if (pid == -1 || pid == 0) {
-    fprintf(stderr, "Error: PID received: %i\n", pid);
-    exit(-1);
-  }
-*/
   // printf("kill the pid: %d\n", pid);
   /* Send SIGTERM to the process group, as pid is for process group */
   // kill(-pid, SIGSTOP);
@@ -515,15 +506,6 @@ void c_hold_job(int jobid) {
 }
 
 void c_cont_job(int jobid) {
-  /*
-  int pid = 0;
-  get_output_file(&pid);
-
-  if (pid == -1 || pid == 0) {
-    fprintf(stderr, "Error: strange PID received: %i\n", pid);
-    exit(-1);
-  }
-  */
   // printf("kill the pid: %d\n", pid);
   /* Send SIGTERM to the process group, as pid is for process group */
   // kill(-pid, SIGCONT);
@@ -545,8 +527,7 @@ int c_tail() {
   int pid;
   str = get_output_file(&pid);
   if (str == 0) {
-    fprintf(stderr, "The output is not stored. Cannot tail.\n");
-    exit(-1);
+    error("Error: the output is not stored. Cannot tail.\n");
   }
 
   c_wait_running_job_send();
@@ -559,8 +540,7 @@ int c_cat() {
   int pid;
   str = get_output_file(&pid);
   if (str == 0) {
-    fprintf(stderr, "The output is not stored. Cannot cat.\n");
-    exit(-1);
+    error("Error: the output is not stored. Cannot cat.\n");
   }
   c_wait_running_job_send();
 
@@ -573,8 +553,7 @@ void c_show_output_file() {
   /* This will exit if there is any error */
   str = get_output_file(&pid);
   if (str == 0) {
-    fprintf(stderr, "The output is not stored.\n");
-    exit(-1);
+    error("Error: the output is not stored.\n");
   }
   printf("%s\n", str);
   free(str);
@@ -593,8 +572,7 @@ void c_kill_job() {
   get_output_file(&pid);
 
   if (pid == -1 || pid == 0) {
-    fprintf(stderr, "Error: strange PID received: %i\n", pid);
-    exit(-1);
+    error("Error: strange PID received: %i\n", pid);
   }
 
   printf("kill the pid: %d\n", pid);
@@ -667,10 +645,10 @@ void c_remove_job() {
       printf("%s", string);
       c_kill_job();
     } else {
-      fprintf(stderr, "Error in the request: %s", string);
+      fprintf(stderr, "Error: in the request: %s", string);
     }
     free(string);
-    exit(-1);
+    exit(EXIT_FAILURE);;
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in remove_job");
@@ -696,9 +674,7 @@ int c_wait_job_recv() {
     res = recv_bytes(server_socket, string, m.u.size);
     if (res != m.u.size)
       error("Error in wait_job - line size");
-    fprintf(stderr, "Error in the request: %s", string);
-    free(string);
-    exit(-1);
+    error("Error: in the request: %s", string);
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in c_wait_job");
@@ -790,9 +766,7 @@ void c_move_urgent() {
     res = recv_bytes(server_socket, string, m.u.size);
     if (res != m.u.size)
       error("Error in move_urgent - line size");
-    fprintf(stderr, "Error in the request: %s", string);
-    free(string);
-    exit(-1);
+    error("Error: in the request: %s", string);
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in move_urgent");
@@ -825,9 +799,7 @@ void c_get_state() {
     res = recv_bytes(server_socket, string, m.u.size);
     if (res != m.u.size)
       error("Error in get_state - line size");
-    fprintf(stderr, "Error in the request: %s", string);
-    free(string);
-    exit(-1);
+    error("Error: in the request: %s", string);
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in get_state");
@@ -860,9 +832,7 @@ void c_swap_jobs() {
     res = recv_bytes(server_socket, string, m.u.size);
     if (res != m.u.size)
       error("Error in swap_jobs - line size");
-    fprintf(stderr, "Error in the request: %s", string);
-    free(string);
-    exit(-1);
+    error("Error: in the request: %s", string);
     /* WILL NOT GO FURTHER */
   default:
     warning("Wrong internal message in swap_jobs");
@@ -932,14 +902,11 @@ void c_show_label() {
 void c_add_wtime() {
   struct Msg m = default_msg();
   if (client_uid != 0) {
-    printf("Only the root can change the job's wall time!\n");
-    return;
+    error("Error: Only the root can change the job's wall time!\n");
   }
   if (m.jobid == 0) {
-    fprintf(stderr,
-            "Error: job ID is not specified. "
-            "Use --job [jobid] or -J [jobid].\n");
-    return;
+    error("Error: job ID is not specified. "
+          "Use --job [jobid] or -J [jobid].\n");
   }
   int res;
   char *string = 0;

@@ -28,12 +28,12 @@ int is_sleep(int pid) {
 
   fp = fopen(filename, "r");
   if (fp == NULL) {
-    fprintf(stderr, "[is_sleep] Error: Couldn't open [%s]\n", filename);
+    fprintf(stderr, "Error: Couldn't open [%s] in in_sleep(PID)\n", filename);
     return -1;
   }
   int token = fscanf(fp, "%d %s %c", &pid, name, &status);
   if (token < 3) {
-    fprintf(stderr, "[is_sleep] Error: not enough (3) tokens\n");
+    fprintf(stderr, "Error: not enough (3) tokens in_sleep(PID)\n");
     return -1;
   }
   fclose(fp);

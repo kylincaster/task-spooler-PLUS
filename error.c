@@ -156,7 +156,7 @@ void error(const char *str, ...) {
 
     problem(ERROR, str, ap);
     close_sqlite();
-    exit(-1);
+    exit(EXIT_FAILURE);
 }
 
 void debug(const char *str, ...)
@@ -185,7 +185,7 @@ void error_msg(const struct Msg *m, const char *str, ...)
     real_errno = errno;
 
     problem_msg(ERROR, m, str, ap);
-    exit(-1);
+    exit(EXIT_FAILURE);
 }
 
 void warning(const char *str, ...) {
