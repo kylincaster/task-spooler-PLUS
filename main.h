@@ -6,6 +6,7 @@
 */
 #include <stdio.h>
 #include <time.h>
+#include <stdint.h>
 
 enum { 
   CMD_LEN = 500, 
@@ -143,8 +144,8 @@ struct CommandLine {
   int num_slots;      /* Slots for the job to use. Default 1 */
   int taskpid;       /* to restore task by pid */
   int require_elevel; /* whether requires error level of dependencies or not */
-  long start_time;
-  int wall_time;
+  time_t start_time;
+  long wall_time;
   enum ListFormat list_format;
 };
 
@@ -188,7 +189,7 @@ struct Msg {
       int wait_enqueuing;
       int num_slots;
       int taskpid;
-      long start_time;
+      time_t start_time;
       int wall_time;
     } newjob;
     struct {
@@ -230,6 +231,8 @@ struct Procinfo {
   time_t enqueue_time;
   time_t start_time;
   time_t end_time;
+  time_t pause_time;
+  time_t pause_duration;
 };
 
 struct Job {
@@ -547,7 +550,7 @@ const char *get_user_path();
 const char *set_server_logfile();
 void write_logfile(const struct Job *p);
 int get_env(const char *env, int v0);
-long str2int(const char *str);
+int64_t str2int(const char *str);
 void debug_write(const char *str);
 const char *uid2user_name(int uid);
 int read_first_jobid_from_logfile(const char *path);
@@ -569,8 +572,7 @@ int is_sleep(int pid);
 double get_cpu_time_by_pid(int pid);
 double get_max_wall_time();
 
-time_t get_job_time_by_job(struct Job* p);
-time_t get_cost_time_by_job(struct Job* p);
+time_t get_work_time_by_job(struct Job* p);
 time_t get_monotonic_sec();
 
 /* cgroups.c */

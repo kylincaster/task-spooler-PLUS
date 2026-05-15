@@ -343,8 +343,7 @@ static char *plainprint_noresult(const struct Job *p) {
   double real_ms = 0;
   char buf[128] = "";
   if (p->state == RUNNING) {
-    time_t endtv;
-    gettimeofday(&endtv, NULL);
+    time_t endtv = get_monotonic_sec();
     real_ms = endtv - p->info.start_time; // TODO
     const char* unit = time_rep(&real_ms);
     double runtime = get_cpu_time_by_pid(p->pid);
