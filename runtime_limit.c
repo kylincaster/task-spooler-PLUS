@@ -130,7 +130,12 @@ double get_max_wall_time() {
 }
 
 time_t get_work_time_by_job(struct Job* p) { // return in seconds
-    time_t t = get_monotonic_sec() - p->info.start_time;
+    if (p->state == FINISHED) {
+        return p->info.end_time - p->info.start_time - p->info.pause_duration;
+    }
+
+    time_t t = (p->state == PAUSE) ? p->info.pause_time : get_monotonic_sec();
+    t -= p->info.start_time + p->info.pause_duration;
     return t;
 }
 

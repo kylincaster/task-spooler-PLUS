@@ -532,6 +532,10 @@ void pinfo_set_start_time_check(struct Procinfo *info);
 
 void pinfo_set_end_time(struct Procinfo *p);
 
+void pinfo_set_pause_time(struct Procinfo *p);
+void pinfo_set_pause_duration(struct Procinfo *p);
+time_t pinfo_get_pause_duration(struct Procinfo *p);
+
 void pinfo_init(struct Procinfo *p);
 
 /* env.c */
