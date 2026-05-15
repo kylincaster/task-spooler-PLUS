@@ -91,7 +91,6 @@ static void run_relink(int pid, struct Result *result) {
   int status = 0;
   char *ofname = command_line.outfile;
   char *command;
-  struct timeval endtv;
   struct tms cpu_times;
 
   /* All went fine - prepare the SIGINT and send runjob_ok */
@@ -139,9 +138,8 @@ static void run_relink(int pid, struct Result *result) {
   hook_on_finish(command_line.jobid, result->errorlevel, ofname, command);
 
   /* Calculate times */
-  gettimeofday(&endtv, NULL);
-  result->real_ms = endtv.tv_sec - command_line.start_time +
-                    ((float)(endtv.tv_usec) / 1000000.);
+  time_t endtv = get_monotonic_sec();
+  result->real_ms = endtv - command_line.start_time;
   times(&cpu_times);
   /* The times are given in clock ticks. The number of clock ticks per second
    * is obtained in POSIX using sysconf(). */
@@ -158,8 +156,7 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   int namesize;
   int res;
   char *command;
-  struct timeval starttv;
-  struct timeval endtv;
+  time_t starttv, endtv;
   struct tms cpu_times;
 
   /* Read the filename */
@@ -177,7 +174,7 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   }
   res = read(fd_read_filename, &starttv, sizeof(starttv));
   if (res != sizeof(starttv))
-    error("Reading the the struct timeval");
+    error("Reading the the struct time_t");
   close(fd_read_filename);
   
   /* All went fine - prepare the SIGINT and send runjob_ok */
@@ -213,9 +210,8 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   hook_on_finish(command_line.jobid, result->errorlevel, ofname, command);
 
   /* Calculate times */
-  gettimeofday(&endtv, NULL);
-  result->real_ms = endtv.tv_sec - starttv.tv_sec +
-                    ((float)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
+  endtv = get_monotonic_sec();
+  result->real_ms = endtv - starttv;
   times(&cpu_times);
   /* The times are given in clock ticks. The number of clock ticks per second
    * is obtained in POSIX using sysconf(). */
@@ -269,7 +265,6 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
   int namesize;
   int outfd;
   int err;
-  struct timeval starttv;
   char *label = "ts_out";
   if (command_line.logfile) {
     label = command_line.logfile;
@@ -363,7 +358,7 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
     free(outfname_full);
   }
   /* Times */
-  gettimeofday(&starttv, NULL);
+  time_t starttv = get_monotonic_sec();
   write(fd_send_filename, &starttv, sizeof(starttv));
   close(fd_send_filename);
 

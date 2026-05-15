@@ -55,13 +55,8 @@ double get_max_wall_time() {
   return DEFAULT_MAX_WALL_TIME;
 }
 
-time_t get_job_time_by_job(struct Job* p) { // return in seconds
+time_t get_work_time_by_job(struct Job* p) { // return in seconds
     time_t t = get_monotonic_sec() - p->info.start_time;
-    return t;
-}
-
-time_t get_cost_time_by_job(struct Job* p) { // return in seconds
-    time_t t = p->info.end_time - p->info.start_time;
     return t;
 }
 

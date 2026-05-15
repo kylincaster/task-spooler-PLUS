@@ -376,7 +376,7 @@ static int check_timeout(struct Job *p) {
     }
 
     double wall_time = abs(p->wall_time) * 1; // 60.0; // minuts -> seconds
-    double job_time = get_job_time_by_job(p);
+    double job_time = get_work_time_by_job(p);
     if (job_time <= wall_time || job_time < 3) {
         return 0;
     }
@@ -671,8 +671,13 @@ void s_get_label(int s, int jobid) {
 }
 
 void s_add_wtime(int s, int jobid, int add_wtime) {
-    struct Job *p = findjob(jobid);
+    if (jobid == 0) {
+        snprintf(buff, 255, "Error: job ID is not specified. Use --job [jobid] or -J [jobid].\n");
+        send_list_line(s, buff);
+        return;
+    }
 
+    struct Job *p = findjob(jobid);
     if (p == NULL) {
         snprintf(buff, 255, "cannot find Job by id: %d\n", jobid);
         send_list_line(s, buff);
@@ -1901,8 +1906,13 @@ void s_job_info(int s, int jobid) {
         int slen = strlen(p->work_dir) + 30;
         fd_nprintf(s, slen, "Workdir: %s\n", p->work_dir);
     }
-    fd_nprintf(s, 100, "Enqueue time: %s", ctime(&p->info.enqueue_time));
-    fd_nprintf(s, 100, "Start time: %s", ctime(&p->info.start_time));
+
+    // calc time-stamp
+    time_t g_boot_wallclock = time(NULL) - get_monotonic_sec();
+    time_t ct = p->info.enqueue_time + g_boot_wallclock;
+    fd_nprintf(s, 100, "Enqueue time: %s", ctime(&ct));
+    ct = p->info.start_time + g_boot_wallclock;
+    fd_nprintf(s, 100, "Start time: %s\n", ctime(&ct));
     if (p->email) {
         fd_nprintf(s, 100, "Email: %s\n", p->email);
     }
@@ -1914,12 +1924,13 @@ void s_job_info(int s, int jobid) {
     }
 
     if (p->state == RUNNING) {
-        t = get_job_time_by_job(p);
+        t = get_work_time_by_job(p);
         char const *unit = time_rep(&t);
         fd_nprintf(s, 100, "RUN time: %.4f %s\n", t, unit);
     } else if (p->state == FINISHED) {
-        t = get_cost_time_by_job(p);
-        fd_nprintf(s, 100, "End time: %s", ctime(&p->info.end_time));
+        t = p->info.end_time - p->info.start_time;
+        ct = p->info.end_time + g_boot_wallclock;
+        fd_nprintf(s, 100, "End time: %s", ctime(&ct));
     }
 
     char const *unit = time_rep(&t);

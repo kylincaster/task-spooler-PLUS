@@ -221,13 +221,7 @@ void parse_opts(int argc, char **argv) {
         command_line.jobid = str2int(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "add_wtime") == 0) {
         command_line.request = c_ADD_WTIME;
-        int jobid, add_wtime;
-        int n = sscanf(optarg, "%d,%d", &jobid, &add_wtime);
-        if (n != 2) {
-          error("Invalid formt for add_wtime %s\n, it should be --add_wtime jobid,add-wtime", optarg);
-        }
-        command_line.jobid = jobid;
-        command_line.wall_time = add_wtime;
+        command_line.wall_time = str2int(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "hold") == 0) {
         command_line.request = c_HOLD_JOB;
         command_line.jobid = str2int(optarg);
@@ -650,18 +644,18 @@ static void print_help(const char *cmd) {
   printf("  --hold [jobid]                  Pause specified job\n");
   printf("  --cont [jobid]                  Resume paused job\n");
 
-  printf("  --suspend [user]                User: pause tasks & lock account\n");
+  printf("  --suspend [USER]                User: pause tasks & lock account\n");
   printf("                                  Root: lock all/specific user account\n");
   
-  printf("  --resume [user]                 User: resume tasks & unlock account\n");
+  printf("  --resume [USER]                 User: resume tasks & unlock account\n");
   printf("                                  Root: unlock all/specific user accounts\n");
 
   printf("  --lock                          Lock server (%d sec. timeout; root has no timeout)\n", DEFAULT_USER_LOCK_TIME);
   printf("  --unlock                        Release server lock\n");
-  printf("  --relink [PID]                  Reconnect tasks after unexpected failures\n");
-  printf("  --job [joibid] || -J [joibid]   Assign/relink job ID\n");
+  printf("  --relink [pid]                  Reconnect tasks after unexpected failures\n");
   printf("  --wtime [walltime]              Wall time limit in minutes (will be clamped to system maximum if exceeded).\n");
-  printf("  --add-wtime <jobid,ADD_time>    Increase job wall time by ADD_time in minutes (root only)\n");
+  printf("  --add_wtime [add_time]          Increase job wall time by ADD_time in minutes (root only)\n");
+  printf("  --job [jobid] || -J [jobid]   specify the Job ID in relink, assignment or wall-time change\n");
   printf("  --daemon                        Run as daemon (root only)\n");
 
   // printf("  --stime [start_time]            Set the relinked task by starting

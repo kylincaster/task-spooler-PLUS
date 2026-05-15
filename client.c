@@ -935,6 +935,12 @@ void c_add_wtime() {
     printf("Only the root can change the job's wall time!\n");
     return;
   }
+  if (m.jobid == 0) {
+    fprintf(stderr,
+            "Error: job ID is not specified. "
+            "Use --job [jobid] or -J [jobid].\n");
+    return;
+  }
   int res;
   char *string = 0;
 

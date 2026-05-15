@@ -86,8 +86,8 @@ char* linux_cmd(char* CMD, char* out, int out_size) {
 }
 */
 
-long str2int(const char *str) {
-  long i;
+int64_t str2int(const char *str) {
+  int64_t i;
   if (sscanf(str, "%ld", &i) == 0) {
     printf("Error in convert %s to number\n", str);
     exit(-1);
