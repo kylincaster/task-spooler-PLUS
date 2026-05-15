@@ -20,6 +20,8 @@ void pinfo_init(struct Procinfo *p)
     p->start_time = 0;
     p->end_time = 0;
     p->enqueue_time = 0;
+    p->pause_time = 0;
+    p->pause_duration = 0;
 }
 
 void pinfo_free(struct Procinfo *p)
@@ -104,6 +106,27 @@ void pinfo_set_start_time(struct Procinfo *p)
 {
     p->start_time = get_monotonic_sec();
     p->end_time = 0;
+}
+
+void pinfo_set_pause_time(struct Procinfo *p)
+{
+    if (p->pause_time == 0) {
+        p->pause_time = get_monotonic_sec();
+    }
+}
+void pinfo_set_pause_duration(struct Procinfo *p)
+{
+    if (p->pause_time != 0) {
+        p->pause_duration += get_monotonic_sec() - p->pause_time;
+    }
+}
+
+time_t pinfo_get_pause_duration(struct Procinfo *p) {
+    time_t duration = p->pause_duration;
+    if (p->pause_time != 0) {
+        duration += get_monotonic_sec() - p->pause_time;
+    }
+    return duration;
 }
 
 void pinfo_set_end_time(struct Procinfo *p)

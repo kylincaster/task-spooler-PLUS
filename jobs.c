@@ -147,6 +147,7 @@ static void free_cores(struct Job *p) {
     user_busy[ts_UID] -= p->num_slots;
     busy_slots -= p->num_slots;
     p->num_allocated = 0;
+    pinfo_set_pause_time(&(p->info));
     // user_queue[ts_UID]--;
     user_jobs[ts_UID]--;
 }
@@ -158,13 +159,14 @@ static int config_running(struct Job *p) {
     if (is_sleep(p->pid)) {
         kill_pids(p->pid, SIGCONT, NULL);
     }
-    printf("start job[%d]: PID: %d\n", p->jobid, p->pid);
+    printf("Start job[%d]: PID: %d\n", p->jobid, p->pid);
     int ts_UID = p->ts_UID;
     user_busy[ts_UID] += p->num_slots;
     busy_slots += p->num_slots;
     p->num_allocated = p->num_slots;
     user_jobs[ts_UID]++;
     p->state = RUNNING;
+    pinfo_set_pause_duration(&(p->info));
     return 0;
 }
 
@@ -385,7 +387,7 @@ static int check_timeout(struct Job *p) {
            p->pid, job_time, wall_time);
     if (safe_pause_pid(p) == 0) {
         p->wall_time = -abs(p->wall_time) - 1440; // plus 24 hrs
-        insert_or_replace_DB(p, "Jobs");        // save as running
+        insert_or_replace_DB(p, "Jobs");          // save as running
         p->state = PAUSE;
     }
     return 1; // time-out
@@ -802,7 +804,7 @@ char const *jstate2string(enum Jobstate s) {
     case WAIT:           jobstate = "wait    "; break;
     case DELINK:         jobstate = "delink  "; break;
     case LOCKED:         jobstate = "locked  "; break;
-    case PAUSE:          jobstate = "holdon  "; break;
+    case PAUSE:          jobstate = "pause   "; break;
     default:             jobstate = "UNKNOWN ";
     }
     return jobstate;
@@ -994,29 +996,6 @@ static struct Job *newjobptr() {
     }
 
     p->next = (struct Job *)calloc(sizeof(struct Job), sizeof(char));
-    /*
-    p->next->next = 0;
-    p->next->output_filename = 0;
-    p->next->pid = 0;
-    p->next->command  = NULL;
-    p->next->work_dir = NULL;
-    p->next->command_strip = 0;
-    p->next->depend_on = NULL;
-    p->next->notify_errorlevel_to = NULL;
-    p->result.errorlevel = 0;
-
-    struct Procinfo* info= &(p->next->info);
-    info->enqueue_time.tv_sec  = 0;
-    info->start_time.tv_sec    = 0;
-    info->end_time.tv_sec      = 0;
-    info->enqueue_time.tv_usec = 0;
-    info->start_time.tv_usec   = 0;
-    info->end_time.tv_usec     = 0;
-    struct Result* result = &(p->next->result);
-    result->user_ms = 0.0;
-    result->system_ms = 0.0;
-    result->real_ms = 0.0;
-    */
     return p->next;
 }
 
@@ -1875,7 +1854,6 @@ void s_job_info(int s, int jobid) {
 
     m.type = INFO_DATA;
 
-    double t;
     send_msg(s, &m);
     pinfo_dump(&p->info, s);
     fd_nprintf(s, 100, "Command: ");
@@ -1906,37 +1884,42 @@ void s_job_info(int s, int jobid) {
         int slen = strlen(p->work_dir) + 30;
         fd_nprintf(s, slen, "Workdir: %s\n", p->work_dir);
     }
-
+    if (p->email) {
+        fd_nprintf(s, 100, "Email: %s\n", p->email);
+    }
     // calc time-stamp
     time_t g_boot_wallclock = time(NULL) - get_monotonic_sec();
     time_t ct = p->info.enqueue_time + g_boot_wallclock;
     fd_nprintf(s, 100, "Enqueue time: %s", ctime(&ct));
     ct = p->info.start_time + g_boot_wallclock;
-    fd_nprintf(s, 100, "Start time: %s\n", ctime(&ct));
-    if (p->email) {
-        fd_nprintf(s, 100, "Email: %s\n", p->email);
-    }
-
-    {
-        double t_wall = abs(p->wall_time) * 60.0; // minuts -> seconds
-        char const *unit = time_rep(&t_wall);
-        fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
-    }
-
-    if (p->state == RUNNING) {
-        t = get_work_time_by_job(p);
-        char const *unit = time_rep(&t);
-        fd_nprintf(s, 100, "RUN time: %.4f %s\n", t, unit);
-    } else if (p->state == FINISHED) {
-        t = p->info.end_time - p->info.start_time;
+    fd_nprintf(s, 100, "Start time: %s", ctime(&ct));
+    if (p->state == FINISHED) {
         ct = p->info.end_time + g_boot_wallclock;
         fd_nprintf(s, 100, "End time: %s", ctime(&ct));
     }
 
-    char const *unit = time_rep(&t);
-    if (t > 0) {
-        fd_nprintf(s, 100, "Job time: %.4f %s\n", t, unit);
+    
+    {
+        double t_wall = abs(p->wall_time) * 60.0; // minuts -> seconds
+        const char *unit = time_rep(&t_wall);
+        fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
     }
+
+    double t = get_work_time_by_job(p);
+    const char* unit = time_rep(&t);
+    fd_nprintf(s, 100, "Work time: %.4f %s\n", t, unit);
+    
+    time_t pause_duration = pinfo_get_pause_duration(&(p->info));
+
+    if (pause_duration > 3) {
+        t = pause_duration;
+        // unit = time_rep(&t);
+        fd_nprintf(s, 100, "Pause time: %.4f %s\n", t, unit);
+        double elapsed = get_work_time_by_job(p) + pause_duration;
+        // unit = time_rep(&elapsed);
+        fd_nprintf(s, 100, "Elapsed time: %.4f %s\n", elapsed, unit);
+    }
+
     if (p->state == FINISHED) {
         struct Result *res = &(p->result);
         fd_nprintf(s, 100, "Error: %d Signal: %d Die: %d\n", res->errorlevel,
