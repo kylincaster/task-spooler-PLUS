@@ -84,12 +84,10 @@ void c_check_daemon() {
 
   /* Good connection */
   if (res == 0) {
-    printf("Good connection to the task-spooler server\n");
-    exit(0);
+    printf("Connected to the task-spooler server.\n");
+    exit(EXIT_SUCCESS);
   } else {
-    printf("Cannot connect to the task-spooler server\n");
-    exit(1);
-  }
+    error("Error: Failed to connect to the task-spooler server.\n");  }
 }
 
 static void try_check_ownership() {
@@ -127,7 +125,7 @@ static void server_info() {
 static void server_daemon() {
   server_info();
   server_main(0, socket_path);
-  exit(0);
+  exit(EXIT_SUCCESS);
 }
 
 /* Returns the fd where to wait for the parent notification */
@@ -150,7 +148,7 @@ static int fork_server() {
     setsid();
     server_info();
     server_main(p[1], socket_path);
-    exit(0);
+    exit(EXIT_SUCCESS);
     break;
   case -1: /* Error */
     return -1;
@@ -216,13 +214,12 @@ int ensure_server_up(int daemonFlag) {
   wait_server_up(notify_fd);
   res = try_connect(server_socket);
 
+  
+  free(socket_path);
   /* The second time didn't work. Abort. */
   if (res == -1) {
-    fprintf(stderr, "The server didn't come up.\n");
-    exit(-1);
+    error("Error: Failed to start the server.\n");
   }
-  free(socket_path);
-
   /* Good connection on the second time */
   return 1;
 }

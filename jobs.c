@@ -1619,7 +1619,7 @@ static int fork_cmd(int const UID, char const *path, char const *cmd) {
             chdir(path);
         }
         system(cmd);
-        exit(0);
+        exit(EXIT_SUCCESS);
         /*
         int cmd_array_size;
         printf("cmd = %s\n", cmd);
@@ -1627,7 +1627,7 @@ static int fork_cmd(int const UID, char const *path, char const *cmd) {
         if (cmd_array_size > 0) {
           printf("run cmd %s\n", cmd_arry[0]);
           system(cmd);
-          exit(0);
+          exit(EXIT_SUCCESS);
           // execvp(cmd_arry[0], cmd_arry);
         }
         // execlp("ls", "-l", NULL); //执行ls -l命令，替换当前进程

@@ -101,7 +101,7 @@ char *get_tmp() {
   char *fileName2 = (char *)malloc(maxFileNameLength * sizeof(char));
 
   if (fileName == NULL || fileName2 == NULL) {
-    fprintf(stderr, "Memory allocation failed.\n");
+    fprintf(stderr, "Error: memory allocation failed in get_tmp().\n");
     return NULL;
   }
 
@@ -221,7 +221,10 @@ void parse_opts(int argc, char **argv) {
         command_line.jobid = str2int(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "add_wtime") == 0) {
         command_line.request = c_ADD_WTIME;
-        command_line.wall_time = str2int(optarg);
+        if (parse_time(optarg, &command_line.wall_time) != 0) {
+          fprintf(stderr, "Error: invalid duration '%s' for --add_wtime (examples, 30s, 3.4m, 1.5H, 2d).\n", optarg);
+          exit(EXIT_FAILURE);
+        }
       } else if (strcmp(longOptions[optionIdx].name, "hold") == 0) {
         command_line.request = c_HOLD_JOB;
         command_line.jobid = str2int(optarg);
@@ -264,13 +267,14 @@ void parse_opts(int argc, char **argv) {
       } else if (strcmp(longOptions[optionIdx].name, "stime") == 0) {
         command_line.start_time = str2int(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "wtime") == 0) {
-        command_line.wall_time = str2int(optarg);
-        if (command_line.wall_time <= 0)
-            error("Wall time must be greater than 0 (got %d)\n", command_line.wall_time);
+        if (parse_time(optarg, &command_line.wall_time) != 0) {
+          error("Error: invalid duration '%s' for --wtime (examples, 30s, 3.4m, 1.5H, 2d).\n", optarg);
+        }
       } else if (strcmp(longOptions[optionIdx].name, "no-bind") == 0) {
         error("no-bind is not implemented");
-      } else
-        error("Wrong option %s.", longOptions[optionIdx].name);
+      } else {
+        error("Error: invalid option %s", longOptions[optionIdx].name);
+      }
       break;
     case 'K':
       command_line.request = c_KILL_SERVER;
@@ -404,8 +408,7 @@ void parse_opts(int argc, char **argv) {
       command_line.request = c_SET_MAX_SLOTS;
       command_line.max_slots = str2int(optarg);
       if (command_line.max_slots < 1) {
-        fprintf(stderr, "You should set at minimum 1 slot.\n");
-        exit(-1);
+        error("Error: at least one slot must be specified.\n");
       }
       break;
     case 'D':
@@ -423,13 +426,10 @@ void parse_opts(int argc, char **argv) {
       command_line.request = c_SWAP_JOBS;
       res = get_two_jobs(optarg, &command_line.jobid, &command_line.jobid2);
       if (!res) {
-        fprintf(stderr, "Wrong <id-id> for -U.\n");
-        exit(-1);
+        error("Error: Invalid <id-id> format for -U: %s.\n", optarg);
       }
       if (command_line.jobid == command_line.jobid2) {
-        fprintf(stderr, "Wrong <id-id> for -U. "
-                        "Use different ids.\n");
-        exit(-1);
+        error("Error: The two Jobids in -U <id-id> must be different.\n");
       }
       break;
     case 'B':
@@ -452,8 +452,7 @@ void parse_opts(int argc, char **argv) {
       else if (strcmp(optarg, "tab") == 0)
         command_line.list_format = TAB;
       else {
-        fprintf(stderr, "Invalid argument for option M: %s.\n", optarg);
-        exit(-1);
+        error("Error: Invalid argument for option -M or --tab: %s.\n", optarg);
       }
       break;
     case ':':
@@ -518,13 +517,11 @@ void parse_opts(int argc, char **argv) {
         command_line.list_format = DEFAULT;
         break;
       default:
-        fprintf(stderr, "Option %c missing argument.\n", optopt);
-        exit(-1);
+        error("Error: Option -%c requires an argument.\n", optopt);
       }
       break;
     case '?':
-      fprintf(stderr, "Wrong option %c.\n", optopt);
-      exit(-1);
+      error("Error: Unknown option -%c.\n", optopt);
     }
   }
 
@@ -566,7 +563,7 @@ void parse_opts(int argc, char **argv) {
       ((!command_line.store_output) || command_line.gzip)) {
     fprintf(stderr,
             "For e-mail, you should store the output (not through gzip)\n");
-    exit(-1);
+    exit(EXIT_FAILURE);
   }
   */
 }
@@ -602,7 +599,7 @@ static void go_background() {
     setsid();
     break;
   default:
-    exit(0);
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -707,8 +704,9 @@ static void unset_getopt_env() {
   if (old_getopt_env == NULL) {
     /* Wipe the string from the environment */
     putenv("POSIXLY_CORRECT");
-  } else
+  } else {
     snprintf(getopt_env, 20, "POSIXLY_CORRECT=%s", old_getopt_env);
+  }
 }
 
 static void get_terminal_width() {

@@ -37,6 +37,80 @@ static double str2double(const char *str) {
     return val;
 }
 
+
+int parse_time(const char *s, time_t *out)
+{
+    double total = 0.0;
+
+    while (*s) {
+
+        while (isspace((unsigned char)*s))
+            s++;
+
+        if (*s == '\0')
+            break;
+
+        char *end;
+
+        errno = 0;
+
+        double value = strtod(s, &end);
+
+        if (errno || end == s)
+            return -1;
+
+        s = end;
+
+        while (isspace((unsigned char)*s))
+            s++;
+
+        double multiplier = 1.0;
+
+        if (*s == '\0') {
+
+            multiplier = 1.0;
+
+        } else if (tolower((unsigned char)*s) == 's') {
+
+            multiplier = 1.0;
+            s++;
+
+        } else if (tolower((unsigned char)*s) == 'm') {
+
+            multiplier = 60.0;
+            s++;
+
+        } else if (tolower((unsigned char)*s) == 'h') {
+
+            multiplier = 3600.0;
+            s++;
+
+        } else if (tolower((unsigned char)*s) == 'd') {
+
+            multiplier = 86400.0;
+            s++;
+
+        } else if (tolower((unsigned char)*s) == 'w') {
+
+            multiplier = 604800.0;
+            s++;
+
+        } else {
+
+            return -1;
+        }
+
+        total += value * multiplier;
+    }
+
+    if (total < 0)
+        return -1;
+
+    *out = (time_t)(total + 0.5);
+
+    return 0;
+}
+
 time_t get_monotonic_sec(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

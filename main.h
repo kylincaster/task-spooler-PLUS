@@ -572,6 +572,7 @@ int is_sleep(int pid);
 double get_cpu_time_by_pid(int pid);
 double get_max_wall_time();
 
+int parse_time(const char *s, time_t *out);
 time_t get_work_time_by_job(struct Job* p);
 time_t get_monotonic_sec();
 

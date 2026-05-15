@@ -71,7 +71,7 @@ char* linux_cmd(char* CMD, char* out, int out_size) {
   fp = popen(CMD, "r");
   if (fp == NULL) {
     printf("Failed to run command: %s\n", CMD);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   /- Read the output a line at a time - output it. -/
@@ -89,8 +89,7 @@ char* linux_cmd(char* CMD, char* out, int out_size) {
 int64_t str2int(const char *str) {
   int64_t i;
   if (sscanf(str, "%ld", &i) == 0) {
-    printf("Error in convert %s to number\n", str);
-    exit(-1);
+    error("Error: in convert %s to int64_t\n", str);
   }
   return i;
 }
