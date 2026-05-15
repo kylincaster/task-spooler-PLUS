@@ -22,6 +22,7 @@ I have enhanced <u>task-spooler</u> to support task execution on my workstation 
 - **Wall-time management** auto-requeue for timed-out tasks in the tail of queue for the deferred execution.
 - **Pause and resume functionality** for any running or queued task
 - **Global control** to pause or resume all tasks for a single user
+- **Source Limits** to limits the computational usage via cgroups
 - **Comprehensive information output**, available in default, JSON, and tab-separated formats
 - **Simple installation and configuration** for ease of use
 - **Optional separation of stdout and stderr** for better log management

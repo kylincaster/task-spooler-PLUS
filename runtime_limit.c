@@ -4,6 +4,10 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <sys/time.h>
+#include <time.h>
+#include "main.h"
+#include <time.h>
 
 #include "default.inc"
 
@@ -33,6 +37,12 @@ static double str2double(const char *str) {
     return val;
 }
 
+time_t get_monotonic_sec(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec;
+}
+
 double get_max_wall_time() {
   const char* str = getenv("TS_MAX_WALL_TIME");
   if (str == NULL || strlen(str) == 0) {
@@ -43,6 +53,16 @@ double get_max_wall_time() {
         return max_walltime;
   }
   return DEFAULT_MAX_WALL_TIME;
+}
+
+time_t get_job_time_by_job(struct Job* p) { // return in seconds
+    time_t t = get_monotonic_sec() - p->info.start_time;
+    return t;
+}
+
+time_t get_cost_time_by_job(struct Job* p) { // return in seconds
+    time_t t = p->info.end_time - p->info.start_time;
+    return t;
 }
 
 double get_cpu_time_by_pid(int pid) {

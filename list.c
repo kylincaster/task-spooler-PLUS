@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <time.h>
 
 #include "main.h"
@@ -184,18 +183,17 @@ static char *print_noresult(const struct Job *p) {
     pos += snprintf(&dependstr[pos], sizeof(dependstr), "]");
   }
 
-  struct timeval starttv = p->info.start_time;
-  struct timeval endtv;
+  time_t starttv = p->info.start_time;
   double real_ms;
   const char *unit;
   char buf[128] = " ";
   if (p->state == QUEUED || p->pid == 0) {
     real_ms = 0;
   } else {
-    gettimeofday(&endtv, NULL);
-    real_ms = endtv.tv_sec - starttv.tv_sec +
-              ((double)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
+    real_ms = get_monotonic_sec() - starttv; // TODO
     unit = time_rep(&real_ms);
+    sprintf(buf, "%s", unit);
+    /*
     double runtime = get_cpu_time_by_pid(p->pid);
     // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
     int rate = (runtime*100.0) / real_ms;
@@ -204,6 +202,7 @@ static char *print_noresult(const struct Job *p) {
     } else {
       sprintf(buf, "%s", unit);
     }
+    */
   }
 
   line = (char *)malloc(maxlen);
@@ -239,8 +238,7 @@ static char *print_result(const struct Job *p) {
   char dependstr[1024] = "[]&&";
   double real_ms = p->result.real_ms;
   if (real_ms == 0.0) {
-    real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
-    real_ms += 1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
+    real_ms = p->info.end_time - p->info.start_time; // TODO
   }
   const char *unit = time_rep(&real_ms);
   int cmd_len;
@@ -345,22 +343,22 @@ static char *plainprint_noresult(const struct Job *p) {
   double real_ms = 0;
   char buf[128] = "";
   if (p->state == RUNNING) {
-    struct timeval starttv = p->info.start_time;
-    struct timeval endtv;
+    time_t endtv;
     gettimeofday(&endtv, NULL);
-    real_ms = endtv.tv_sec - starttv.tv_sec +
-                ((double)(endtv.tv_usec - starttv.tv_usec) / 1000000.);
+    real_ms = endtv - p->info.start_time; // TODO
     const char* unit = time_rep(&real_ms);
     double runtime = get_cpu_time_by_pid(p->pid);
     // printf("get runtime %.3f sec for %d\n", runtime, p->pid);
     int rate = (runtime*100.0) / real_ms;
     int is_timeout = p->wall_time < 0;
-
+    /*
     if (rate < 80 && is_timeout == 0) {
       sprintf(buf, "%s %d%%", unit, rate);
     } else {
       sprintf(buf, "%s", unit);
     }
+    */
+    sprintf(buf, "%s", unit);
   }
   snprintf(line, maxlen, "%i\t%s\t%d\t%s\t%s\t%i\t%.2f%s\t%s\t%s\t%s\n", 
     p->jobid, jobstate, p->num_slots, user_name[p->ts_UID], label,
@@ -380,8 +378,7 @@ static char *plainprint_result(const struct Job *p) {
   char dependstr[256] = "[]";
   double real_ms = p->result.real_ms;
   if (real_ms == 0.0) {
-    real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
-    real_ms += 1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
+    real_ms = p->info.end_time - p->info.start_time; // TODO
   }
 
   const char *unit = time_rep(&real_ms);

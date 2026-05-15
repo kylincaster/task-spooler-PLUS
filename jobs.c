@@ -82,9 +82,7 @@ void setup_ssmtp() {
 static void send_mail_via_ssmtp(struct Job *p) {
     double real_ms = p->result.real_ms; // units in second
     if (real_ms == 0.0) {
-        real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
-        real_ms +=
-            1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
+        real_ms = p->info.end_time - p->info.start_time; // TODO add a function
     }
     // skip the short task
     if (real_ms < sstmp_skip_ms || p->email == NULL) {
@@ -109,9 +107,7 @@ static void sound_notify(struct Job *p) {
 #ifdef SOUND
     float real_ms = p->result.real_ms;
     if (real_ms == 0.0) {
-        real_ms = p->info.end_time.tv_sec - p->info.start_time.tv_sec;
-        real_ms +=
-            1e-6 * (p->info.end_time.tv_usec - p->info.start_time.tv_usec);
+        real_ms = p->info.end_time - p->info.start_time; // TODO ADD FUNC
     }
     // skip the short task
     if (real_ms < 5) {
@@ -379,14 +375,14 @@ static int check_timeout(struct Job *p) {
         return 0;
     }
 
-    double wall_time = abs(p->wall_time) * 60.0; // minuts -> seconds
-    double cpu_time = get_cpu_time_by_pid(p->pid);
-    if (cpu_time <= wall_time || cpu_time < 3) {
+    double wall_time = abs(p->wall_time) * 1; // 60.0; // minuts -> seconds
+    double job_time = get_job_time_by_job(p);
+    if (job_time <= wall_time || job_time < 3) {
         return 0;
     }
 
     printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid,
-           p->pid, cpu_time, wall_time);
+           p->pid, job_time, wall_time);
     if (safe_pause_pid(p) == 0) {
         p->wall_time = -abs(p->wall_time) - 1440; // plus 24 hrs
         insert_or_replace_DB(p, "Jobs");        // save as running
@@ -1313,8 +1309,7 @@ int s_newjob(int s, struct Msg *m, int ts_UID) {
     } else if (p->state == RELINK) {
         /* for manually relink running task */
         p->pid = m->u.newjob.taskpid;
-        p->info.start_time.tv_sec = m->u.newjob.start_time;
-        p->info.start_time.tv_usec = 0;
+        p->info.start_time = m->u.newjob.start_time;
         insert_or_replace_DB(p, "Jobs");
     } else if (p->state == QUEUED) {
         insert_DB(p, "Jobs");
@@ -1906,8 +1901,8 @@ void s_job_info(int s, int jobid) {
         int slen = strlen(p->work_dir) + 30;
         fd_nprintf(s, slen, "Workdir: %s\n", p->work_dir);
     }
-    fd_nprintf(s, 100, "Enqueue time: %s", ctime(&p->info.enqueue_time.tv_sec));
-    fd_nprintf(s, 100, "Start time: %s", ctime(&p->info.start_time.tv_sec));
+    fd_nprintf(s, 100, "Enqueue time: %s", ctime(&p->info.enqueue_time));
+    fd_nprintf(s, 100, "Start time: %s", ctime(&p->info.start_time));
     if (p->email) {
         fd_nprintf(s, 100, "Email: %s\n", p->email);
     }
@@ -1919,14 +1914,12 @@ void s_job_info(int s, int jobid) {
     }
 
     if (p->state == RUNNING) {
-        t = pinfo_time_until_now(&p->info);
-
-        double t_cpu = get_cpu_time_by_pid(p->pid);
-        char const *unit = time_rep(&t_cpu);
-        fd_nprintf(s, 100, "CPU time: %.4f %s\n", t_cpu, unit);
+        t = get_job_time_by_job(p);
+        char const *unit = time_rep(&t);
+        fd_nprintf(s, 100, "RUN time: %.4f %s\n", t, unit);
     } else if (p->state == FINISHED) {
-        t = pinfo_time_run(&p->info);
-        fd_nprintf(s, 100, "End time: %s", ctime(&p->info.end_time.tv_sec));
+        t = get_cost_time_by_job(p);
+        fd_nprintf(s, 100, "End time: %s", ctime(&p->info.end_time));
     }
 
     char const *unit = time_rep(&t);

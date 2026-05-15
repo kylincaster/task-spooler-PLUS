@@ -260,10 +260,10 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       job->dependency_errorlevel, label, email, job->num_slots,
       result->errorlevel, result->died_by_signal, result->signal,
       result->user_ms, result->system_ms, result->real_ms, result->skipped,
-      info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time.tv_sec,
-      info->start_time.tv_sec, info->end_time.tv_sec,
-      info->enqueue_time.tv_usec, info->start_time.tv_usec,
-      info->end_time.tv_usec, order_id, job->command_strip, job->work_dir);
+      info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
+      info->start_time, info->end_time,
+      0, 0, 0, // TODO
+      order_id, job->command_strip, job->work_dir);
   char *errmsg = NULL;
   int rs = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
   free(depend_on);
@@ -477,13 +477,13 @@ struct Job *read_DB(int jobid, const char *table) {
     info->allocchars = sqlite3_column_bytes(stmt, 25) / sizeof(char);
 
     job->wall_time = sqlite3_column_int(stmt, 26);
-    info->enqueue_time.tv_sec = sqlite3_column_int64(stmt, 27);
-    info->start_time.tv_sec = sqlite3_column_int64(stmt, 28);
-    info->end_time.tv_sec = sqlite3_column_int64(stmt, 29);
+    info->enqueue_time = sqlite3_column_int64(stmt, 27);
+    info->start_time = sqlite3_column_int64(stmt, 28);
+    info->end_time = sqlite3_column_int64(stmt, 29);
 
-    info->enqueue_time.tv_usec = sqlite3_column_int64(stmt, 30);
-    info->start_time.tv_usec = sqlite3_column_int64(stmt, 31);
-    info->end_time.tv_usec = sqlite3_column_int64(stmt, 32);
+    // info->enqueue_time = sqlite3_column_int64(stmt, 30);
+    // info->start_time = sqlite3_column_int64(stmt, 31);
+    // info->end_time = sqlite3_column_int64(stmt, 32);
     job->command_strip = sqlite3_column_int(stmt, 34);
 
     strcpy(sql, (const char *)sqlite3_column_text(stmt, 35));
