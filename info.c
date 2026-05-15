@@ -17,12 +17,9 @@ void pinfo_init(struct Procinfo *p)
     p->ptr = 0;
     p->nchars = 0;
     p->allocchars = 0;
-    p->start_time.tv_sec = 0;
-    p->start_time.tv_usec = 0;
-    p->end_time.tv_sec = 0;
-    p->end_time.tv_usec = 0;
-    p->enqueue_time.tv_sec = 0;
-    p->enqueue_time.tv_usec = 0;
+    p->start_time = 0;
+    p->end_time = 0;
+    p->enqueue_time = 0;
 }
 
 void pinfo_free(struct Procinfo *p)
@@ -93,49 +90,24 @@ int pinfo_size(const struct Procinfo *p)
 
 void pinfo_set_enqueue_time(struct Procinfo *p)
 {
-    gettimeofday(&p->enqueue_time, 0);
-    p->start_time.tv_sec = 0;
-    p->start_time.tv_usec = 0;
-    p->end_time.tv_sec = 0;
-    p->end_time.tv_usec = 0;
+    p->enqueue_time = get_monotonic_sec();
+    p->start_time = 0;
+    p->end_time = 0;
 }
 
 void pinfo_set_start_time_check(struct Procinfo *info) {
-    if (info->start_time.tv_sec == 0 && info->start_time.tv_usec == 0) {
+    if (info->start_time == 0) {
         pinfo_set_start_time(info);
     }
 }
 void pinfo_set_start_time(struct Procinfo *p)
 {
-    gettimeofday(&p->start_time, 0);
-    p->end_time.tv_sec = 0;
-    p->end_time.tv_usec = 0;
+    p->start_time = get_monotonic_sec();
+    p->end_time = 0;
 }
 
 void pinfo_set_end_time(struct Procinfo *p)
 {
-    gettimeofday(&p->end_time, 0);
+    p->end_time = get_monotonic_sec();
 }
 
-float pinfo_time_until_now(const struct Procinfo *p)
-{
-    float t;
-    struct timeval now;
-
-    gettimeofday(&now, 0);
-
-    t = now.tv_sec - p->start_time.tv_sec;
-    t += (float) (now.tv_usec - p->start_time.tv_usec) / 1000000.;
-
-    return t;
-}
-
-float pinfo_time_run(const struct Procinfo *p)
-{
-    float t;
-
-    t = p->end_time.tv_sec - p->start_time.tv_sec;
-    t += (float) (p->end_time.tv_usec - p->start_time.tv_usec) / 1000000.;
-
-    return t;
-}

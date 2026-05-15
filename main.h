@@ -5,7 +5,7 @@
     Please find the license in the provided COPYING file.
 */
 #include <stdio.h>
-#include <sys/time.h>
+#include <time.h>
 
 enum { 
   CMD_LEN = 500, 
@@ -227,9 +227,9 @@ struct Procinfo {
   char *ptr;
   int nchars;
   int allocchars;
-  struct timeval enqueue_time;
-  struct timeval start_time;
-  struct timeval end_time;
+  time_t enqueue_time;
+  time_t start_time;
+  time_t end_time;
 };
 
 struct Job {
@@ -529,10 +529,6 @@ void pinfo_set_start_time_check(struct Procinfo *info);
 
 void pinfo_set_end_time(struct Procinfo *p);
 
-float pinfo_time_until_now(const struct Procinfo *p);
-
-float pinfo_time_run(const struct Procinfo *p);
-
 void pinfo_init(struct Procinfo *p);
 
 /* env.c */
@@ -572,6 +568,10 @@ int is_sleep(int pid);
 /* runtime_limit.c */
 double get_cpu_time_by_pid(int pid);
 double get_max_wall_time();
+
+time_t get_job_time_by_job(struct Job* p);
+time_t get_cost_time_by_job(struct Job* p);
+time_t get_monotonic_sec();
 
 /* cgroups.c */
 void cgroups_create_job(const struct Job *p);
