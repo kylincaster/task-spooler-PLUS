@@ -190,7 +190,7 @@ struct Msg {
       int num_slots;
       int taskpid;
       time_t start_time;
-      int wall_time;
+      int64_t wall_time;
     } newjob;
     struct {
       int ofilename_size;
@@ -415,7 +415,7 @@ int wake_hold_client();
 
 void s_get_label(int s, int jobid);
 
-void s_add_wtime(int s, int jobid, int add_wtime);
+void s_add_wtime(int s, int jobid, int64_t add_wtime);
 
 void s_kill_all_jobs(int s, int ts_UID);
 
@@ -530,9 +530,6 @@ void pinfo_set_start_time_check(struct Procinfo *info);
 
 void pinfo_set_end_time(struct Procinfo *p);
 
-void pinfo_set_pause_time(struct Procinfo *p);
-void pinfo_set_pause_duration(struct Procinfo *p);
-
 void pinfo_init(struct Procinfo *p);
 
 /* env.c */
@@ -551,7 +548,7 @@ const char *get_user_path();
 const char *set_server_logfile();
 void write_logfile(const struct Job *p);
 int get_env(const char *env, int v0);
-int64_t str2int(const char *str);
+int64_t str2int64(const char *str);
 void debug_write(const char *str);
 const char *uid2user_name(int uid);
 int read_first_jobid_from_logfile(const char *path);
@@ -559,7 +556,6 @@ void kill_pids(int ppid, int signal, const char* cmd);
 
 // char* linux_cmd(char* CMD, char* out, int out_size);
 char **split_str(const char *str, int *size);
-void check_relink(int pid);
 char *charArray_string(int num, char** array);
 
 /* locker */
@@ -576,8 +572,9 @@ typedef struct {
 } time_repr_t;
 time_repr_t format_time(time_t t);
 int64_t i64abs(int64_t x);
-double get_cpu_time_by_pid(int pid);
-double get_max_wall_time();
+void check_relink(int pid);
+time_t get_cpu_time_by_pid(int pid);
+time_t get_max_wall_time();
 int parse_time(const char *s, time_t *out);
 time_t get_work_time_by_job(const struct Job* p);
 time_t get_pause_time_by_job(const struct Job* p);
@@ -627,6 +624,7 @@ void c_check_daemon();
 const char *get_sqlite_path();
 int open_sqlite();
 int close_sqlite();
+int update_field_int64(const char *tableName, int jobid, const char *columnName, int64_t newValue);
 int insert_DB(struct Job* job, const char* table);
 int insert_or_replace_DB(struct Job* job, const char* table);
 struct Job* read_DB(int jobid, const char* table);

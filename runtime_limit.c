@@ -5,7 +5,9 @@
 #include <errno.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <signal.h>
 
 #include "main.h"
 #include "default.inc"
@@ -13,6 +15,21 @@
 int64_t i64abs(int64_t x)
 {
     return x < 0 ? -x : x;
+}
+
+void check_relink(int pid) {
+  char buff[256];
+  struct stat t_stat;
+  snprintf(buff, 255, "/proc/%d/stat", pid);
+  if (stat(buff, &t_stat) != -1) {
+    time_t g_boot_wallclock = time(NULL) - get_monotonic_sec();
+    command_line.start_time = t_stat.st_ctime - g_boot_wallclock;
+  } else {
+    if (kill(pid, 0) != 0) {
+      error("Client: PID[%d] is dead\n", pid);
+    }
+  }
+  command_line.outfile = NULL;
 }
 
 time_repr_t format_time(time_t t)
@@ -40,7 +57,7 @@ time_repr_t format_time(time_t t)
     out.value = time_in_sec;
     return out;
 }
-
+/*
 static double str2double(const char *str) {
     char *endptr;
     errno = 0;
@@ -65,7 +82,7 @@ static double str2double(const char *str) {
 
     return val;
 }
-
+*/
 
 int parse_time(const char *s, time_t *out)
 {
@@ -146,12 +163,12 @@ time_t get_monotonic_sec(void) {
     return ts.tv_sec;
 }
 
-double get_max_wall_time() {
+time_t get_max_wall_time() {
   const char* str = getenv("TS_MAX_WALL_TIME");
   if (str == NULL || strlen(str) == 0) {
     ;
   } else {
-    double max_walltime = str2double(str);
+    double max_walltime = str2int64(str);
     if (max_walltime > 0)
         return max_walltime;
   }
@@ -175,12 +192,12 @@ time_t get_pause_time_by_job(const struct Job* p) { // return in seconds
     return t_pause;
 }
 
-double get_cpu_time_by_pid(int pid) {
+time_t get_cpu_time_by_pid(int pid) {
     char path[64];
     FILE *fp;
     long utime, stime;
     long ticks;
-    double total_time;
+    time_t total_time;
 
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
 
@@ -223,7 +240,7 @@ double get_cpu_time_by_pid(int pid) {
         return -1;
     }
 
-    total_time = (double)(utime + stime) / ticks;
+    total_time = (time_t)(utime + stime) / ticks;
     // printf("total_time = %f, %ld, %ld %ld\n", total_time, utime, stime, ticks);
     return total_time; // 单位：秒
 }

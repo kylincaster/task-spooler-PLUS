@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -86,7 +85,7 @@ char* linux_cmd(char* CMD, char* out, int out_size) {
 }
 */
 
-int64_t str2int(const char *str) {
+int64_t str2int64(const char *str) {
   int64_t i;
   if (sscanf(str, "%ld", &i) == 0) {
     error("Error: in convert %s to int64_t\n", str);
@@ -100,20 +99,6 @@ const char *set_server_logfile() {
     logfile_path = DEFAULT_LOG_PATH;
   }
   return logfile_path;
-}
-
-void check_relink(int pid) {
-  char buff[256];
-  struct stat t_stat;
-  snprintf(buff, 255, "/proc/%d/stat", pid);
-  if (stat(buff, &t_stat) != -1) {
-    command_line.start_time = t_stat.st_ctime;
-  } else {
-    if (kill(pid, 0) != 0) {
-      error("Client: PID[%d] is dead\n", pid);
-    }
-  }
-  command_line.outfile = NULL;
 }
 
 /*

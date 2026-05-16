@@ -138,6 +138,23 @@ static void destroy_job(struct Job *p) {
     }
 }
 
+static void pause_job_config(struct Job* p) {
+    if (p->info.pause_time == 0) {
+        p->info.pause_time = get_monotonic_sec();
+        update_field_int64("Jobs", p->jobid, "pause_time", p->info.pause_time);
+    }
+}
+
+static void rerun_job_config(struct Job* p) {
+    if (p->info.pause_time != 0) {
+        p->info.pause_duration += get_monotonic_sec() - p->info.pause_time;
+        update_field_int64("Jobs", p->jobid, "pause_duration", p->info.pause_duration);
+
+        p->info.pause_time = 0;
+        update_field_int64("Jobs", p->jobid, "pause_time", p->info.pause_time);
+    }
+}
+
 static void free_cores(struct Job *p) {
     if (p == NULL && p->num_allocated == 0) {
         return;
@@ -146,7 +163,6 @@ static void free_cores(struct Job *p) {
     user_busy[ts_UID] -= p->num_slots;
     busy_slots -= p->num_slots;
     p->num_allocated = 0;
-    pinfo_set_pause_time(&(p->info));
     // user_queue[ts_UID]--;
     user_jobs[ts_UID]--;
 }
@@ -165,7 +181,7 @@ static int config_running(struct Job *p) {
     p->num_allocated = p->num_slots;
     user_jobs[ts_UID]++;
     p->state = RUNNING;
-    pinfo_set_pause_duration(&(p->info));
+    rerun_job_config(p);
     return 0;
 }
 
@@ -376,17 +392,16 @@ static int check_timeout(struct Job *p) {
         return 0;
     }
 
-    double wall_time = abs(p->wall_time) * 1; // 60.0; // minuts -> seconds
+    double wall_time = i64abs(p->wall_time);
     double job_time = get_work_time_by_job(p);
     if (job_time <= wall_time || job_time < 3) {
         return 0;
     }
 
-    printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid,
-           p->pid, job_time, wall_time);
+    printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid, p->pid, job_time, wall_time);
     if (safe_pause_pid(p) == 0) {
-        p->wall_time = -abs(p->wall_time) - 1440; // plus 24 hrs
-        insert_or_replace_DB(p, "Jobs");          // save as running
+        p->wall_time = -i64abs(p->wall_time) - 86400; // plus 24 hrs
+        update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
         p->state = PAUSE;
     }
     return 1; // time-out
@@ -671,7 +686,7 @@ void s_get_label(int s, int jobid) {
     }
 }
 
-void s_add_wtime(int s, int jobid, int add_wtime) {
+void s_add_wtime(int s, int jobid, int64_t add_wtime) {
     if (jobid == 0) {
         snprintf(buff, 255, "Error: job ID is not specified. Use --job [jobid] or -J [jobid].\n");
         send_list_line(s, buff);
@@ -685,19 +700,19 @@ void s_add_wtime(int s, int jobid, int add_wtime) {
         return;
     }
 
-    int new_wtime = abs(p->wall_time) + add_wtime;
+    int64_t new_wtime = i64abs(p->wall_time) + add_wtime;
     if (new_wtime <= 0) {
         snprintf(buff, 255,
-                 "Error: [%d], negative wall-time after change from %d => %d\n",
-                 jobid, abs(p->wall_time), new_wtime);
+                 "Error: [%d], negative wall-time after change from %ld => %ld\n",
+                 jobid, i64abs(p->wall_time), new_wtime);
         send_list_line(s, buff);
         return;
     }
     p->wall_time = (p->wall_time < 0) ? -new_wtime : new_wtime;
 
     insert_or_replace_DB(p, "Jobs");
-    snprintf(buff, 255, "Set [%d] wall-time as %d hr\n", jobid,
-             abs(p->wall_time));
+    snprintf(buff, 255, "Set [%d] wall-time as %ld hr\n", jobid,
+             i64abs(p->wall_time));
     send_list_line(s, buff);
     printf("s_add_wtime(): %s", buff);
 }
@@ -1864,9 +1879,12 @@ void s_job_info(int s, int jobid) {
         fd_nprintf(s, 100, "]&& ");
     }
     char const *status = "";
-    if (p->state != PAUSE && is_sleep(p->pid)) {
-        status = " in SLEEP!";
+    if (p->state != FINISHED) {
+        if (p->state != PAUSE && is_sleep(p->pid)) {
+            status = " in SLEEP!";
+        }
     }
+    
     write(s, p->command + p->command_strip,
           strlen(p->command + p->command_strip));
     fd_nprintf(s, 100, "\n");
@@ -1896,16 +1914,15 @@ void s_job_info(int s, int jobid) {
         ct = p->info.pause_time + g_boot_wallclock;
         fd_nprintf(s, 100, "Pause time: %s", ctime(&ct));
     }
+
     if (p->state == FINISHED) {
         ct = p->info.end_time + g_boot_wallclock;
         fd_nprintf(s, 100, "End time: %s", ctime(&ct));
     }
 
-    
     time_t t_wall = i64abs(p->wall_time);
     time_repr_t r = format_time(t_wall);
     fd_nprintf(s, 100, "Wall-time: %.4f %c\n----\n", r.value, r.unit);
-
     time_t t_work = get_work_time_by_job(p);
     r = format_time(t_work);
     fd_nprintf(s, 100, "Work time: %.4f %c\n", r.value, r.unit);
@@ -2372,6 +2389,7 @@ static int safe_pause_pid(struct Job *p) {
     kill_pids(p->pid, SIGSTOP, NULL);
     if (is_sleep(p->pid) == 1) {
         free_cores(p);
+        pause_job_config(p);
         return 0;
     } else {
         kill_pids(p->pid, SIGCONT, NULL);
@@ -2500,7 +2518,7 @@ void s_cont_job(int s, int jobid, int ts_UID) {
             snprintf(buff, 255, "Error: cannot rerun job [%d]\n", jobid);
         }
     } // p->pid
-    p->wall_time = abs(p->wall_time);
+    p->wall_time = i64abs(p->wall_time);
     send_list_line(s, buff);
 }
 
