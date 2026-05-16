@@ -218,7 +218,7 @@ void parse_opts(int argc, char **argv) {
         command_line.request = c_SHOW_HELP;
       } else if (strcmp(longOptions[optionIdx].name, "get_label") == 0) {
         command_line.request = c_GET_LABEL;
-        command_line.jobid = str2int(optarg);
+        command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "add_wtime") == 0) {
         command_line.request = c_ADD_WTIME;
         if (parse_time(optarg, &command_line.wall_time) != 0) {
@@ -227,10 +227,10 @@ void parse_opts(int argc, char **argv) {
         }
       } else if (strcmp(longOptions[optionIdx].name, "hold") == 0) {
         command_line.request = c_HOLD_JOB;
-        command_line.jobid = str2int(optarg);
+        command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "cont") == 0) {
         command_line.request = c_CONT_JOB;
-        command_line.jobid = str2int(optarg);
+        command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "lock-ts") == 0) {
         command_line.request = c_LOCK_SERVER;
       } else if (strcmp(longOptions[optionIdx].name, "unlock-ts") == 0) {
@@ -253,19 +253,19 @@ void parse_opts(int argc, char **argv) {
       } else if (strcmp(longOptions[optionIdx].name, "full_cmd") == 0) {
         command_line.request = c_SHOW_CMD;
         if (optarg != NULL) {
-          command_line.jobid = -1; // str2int(optarg);
+          command_line.jobid = -1; 
         } else {
           command_line.jobid = -1;
         }
       } else if (strcmp(longOptions[optionIdx].name, "relink") == 0) {
-        command_line.taskpid = str2int(optarg);
+        command_line.taskpid = str2int64(optarg);
         if (command_line.taskpid <= 0)
           command_line.taskpid = 0;
         else {
           check_relink(command_line.taskpid);
         }
       } else if (strcmp(longOptions[optionIdx].name, "stime") == 0) {
-        command_line.start_time = str2int(optarg);
+        command_line.start_time = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "wtime") == 0) {
         if (parse_time(optarg, &command_line.wall_time) != 0) {
           error("Error: invalid duration '%s' for --wtime (examples, 30s, 3.4m, 1.5H, 2d).\n", optarg);
@@ -289,11 +289,11 @@ void parse_opts(int argc, char **argv) {
     case 'k':
       printf("c_KILL_JOB = %s\n", optarg);
       command_line.request = c_KILL_JOB;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'r':
       command_line.request = c_REMOVEJOB;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'l':
       command_line.request = c_LIST;
@@ -317,11 +317,11 @@ void parse_opts(int argc, char **argv) {
       break;
     case 'c':
       command_line.request = c_CAT;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'o':
       command_line.request = c_SHOW_OUTPUT_FILE;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'O':
       command_line.logfile = optarg;
@@ -343,40 +343,40 @@ void parse_opts(int argc, char **argv) {
       break;
     case 't':
       command_line.request = c_TAIL;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'p':
       command_line.request = c_SHOW_PID;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'i':
       command_line.request = c_INFO;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'q':
       command_line.request = c_LAST_ID;
       break;
     case 'a':
       command_line.request = c_GET_LABEL;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'F':
       command_line.request = c_SHOW_CMD;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'N':
-      command_line.num_slots = str2int(optarg);
+      command_line.num_slots = str2int64(optarg);
       if (command_line.num_slots < 0)
         command_line.num_slots = 0;
       break;
     case 'J':
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       if (command_line.jobid < 0)
         command_line.jobid = 0;
       break;
     /*
     case 'Z':
-      command_line.taskpid = str2int(optarg);
+      command_line.taskpid = str2int64(optarg);
       if (command_line.taskpid <= 0)
         command_line.taskpid = 0;
       else {
@@ -394,19 +394,19 @@ void parse_opts(int argc, char **argv) {
     */
     case 'w':
       command_line.request = c_WAITJOB;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'u':
       command_line.request = c_URGENT;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 's':
       command_line.request = c_GET_STATE;
-      command_line.jobid = str2int(optarg);
+      command_line.jobid = str2int64(optarg);
       break;
     case 'S':
       command_line.request = c_SET_MAX_SLOTS;
-      command_line.max_slots = str2int(optarg);
+      command_line.max_slots = str2int64(optarg);
       if (command_line.max_slots < 1) {
         error("Error: at least one slot must be specified.\n");
       }
@@ -650,7 +650,7 @@ static void print_help(const char *cmd) {
   printf("  --lock                          Lock server (%d sec. timeout; root has no timeout)\n", DEFAULT_USER_LOCK_TIME);
   printf("  --unlock                        Release server lock\n");
   printf("  --relink [pid]                  Reconnect tasks after unexpected failures\n");
-  printf("  --wtime [walltime]              Wall time limit in minutes (will be clamped to system maximum if exceeded).\n");
+  printf("  --wtime [walltime]              Wall time limit, examples: 30s, 3.4m, 1.5H, 2d. (will be clamped to system maximum if exceeded).\n");
   printf("  --add_wtime [add_time]          Increase job wall time by ADD_time in minutes (root only)\n");
   printf("  --job [jobid] || -J [jobid]   specify the Job ID in relink, assignment or wall-time change\n");
   printf("  --daemon                        Run as daemon (root only)\n");

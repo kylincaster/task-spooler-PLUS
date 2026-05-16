@@ -232,6 +232,7 @@ static char *print_result(const struct Job *p) {
   if (real_sec == 0.0) {
     real_sec = p->info.end_time - p->info.start_time; // TODO
   }
+
   time_repr_t r = format_time(real_sec);
   int cmd_len;
 
@@ -368,6 +369,7 @@ static char *plainprint_result(const struct Job *p) {
   /* 20 chars should suffice for a string like "[int,int,..]&& " */
   char dependstr[256] = "[]";
   time_t real_sec = p->result.real_sec;
+
   if (real_sec == 0.0) {
     real_sec = p->info.end_time - p->info.start_time; // TODO
   }

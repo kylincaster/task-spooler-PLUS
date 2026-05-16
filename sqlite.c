@@ -114,7 +114,7 @@ int open_sqlite() {
       "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
       "NULL, "
-      "enqueue_time_ms INT NOT NULL, start_time_ms INT NOT NULL, end_time_ms "
+      "pause_time INT NOT NULL, pause_duration INT NOT NULL, end_time_ms "
       "INT NOT NULL, "
       "order_id INT NOT NULL, command_strip INT NOT NULL, work_dir TEXT    NOT "
       "NULL);";
@@ -154,7 +154,7 @@ int open_sqlite() {
       "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
       "NULL, "
-      "enqueue_time_ms INT NOT NULL, start_time_ms INT NOT NULL, end_time_ms "
+      "pause_time INT NOT NULL, pause_duration INT NOT NULL, end_time_ms "
       "INT NOT NULL, "
       "order_id INT NOT NULL, command_strip INT NOT NULL, work_dir TEXT    NOT "
       "NULL);";
@@ -179,8 +179,40 @@ int open_sqlite() {
     sqlite3_free(zErrMsg);
     // error_flag--;
   }
-
   return error_flag;
+}
+
+
+/**
+ * 修改整型字段值
+ */
+int update_field_int64(const char *tableName, int jobid, const char *columnName, int64_t newValue) {
+    sqlite3_stmt *stmt = NULL;
+    char sql[512];
+    int rc;
+    
+    snprintf(sql, sizeof(sql), 
+             "UPDATE %s SET %s = ? WHERE jobid = ?;", 
+             tableName, columnName);
+    
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return -1;
+    }
+    
+    sqlite3_bind_int64(stmt, 1, newValue);
+    sqlite3_bind_int(stmt, 2, jobid);
+    
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Update failed: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return -1;
+    }
+    
+    sqlite3_finalize(stmt);
+    return 0;
 }
 
 int get_jobids_DB() {
@@ -247,7 +279,7 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       "signal,user_sec,system_sec,real_sec,skipped,"
       "ptr,nchars,allocchars,wall_time,"
       "enqueue_time,start_time,end_time,"
-      "enqueue_time_ms,start_time_ms,end_time_ms, "
+      "pause_time,pause_duration,end_time_ms, "
       "order_id, command_strip, work_dir)"
       "VALUES (%d,'%s',%d,'%s',%d,%d,%d,%d,'%s',%d,'%s',%d,%d,'%s','%s',%d,"
       "%d,%d,%d,%ld,%ld,%ld,%d,"
@@ -262,7 +294,7 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       result->user_sec, result->system_sec, result->real_sec, result->skipped,
       info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
       info->start_time, info->end_time,
-      0, 0, 0, // TODO
+      info->pause_time, info->pause_duration, (time_t)(0),
       order_id, job->command_strip, job->work_dir);
   char *errmsg = NULL;
   int rs = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
@@ -473,16 +505,16 @@ struct Job *read_DB(int jobid, const char *table) {
     strcpy(sql, (const char *)sqlite3_column_text(stmt, 23));
     copy_with_nullcheck(&(info->ptr), sql);
 
-    info->nchars = sqlite3_column_bytes(stmt, 24) / sizeof(char);
-    info->allocchars = sqlite3_column_bytes(stmt, 25) / sizeof(char);
+    info->nchars = sqlite3_column_bytes(stmt, 24);
+    info->allocchars = sqlite3_column_bytes(stmt, 25);
 
-    job->wall_time = sqlite3_column_int(stmt, 26);
+    job->wall_time = sqlite3_column_int64(stmt, 26);
     info->enqueue_time = sqlite3_column_int64(stmt, 27);
     info->start_time = sqlite3_column_int64(stmt, 28);
     info->end_time = sqlite3_column_int64(stmt, 29);
 
-    // info->enqueue_time = sqlite3_column_int64(stmt, 30);
-    // info->start_time = sqlite3_column_int64(stmt, 31);
+    info->pause_time = sqlite3_column_int64(stmt, 30);
+    info->pause_duration = sqlite3_column_int64(stmt, 31);
     // info->end_time = sqlite3_column_int64(stmt, 32);
     job->command_strip = sqlite3_column_int(stmt, 34);
 

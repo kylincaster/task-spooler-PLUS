@@ -5,7 +5,7 @@
 #define DEFAULT_EMAIL_TIME 45.0
 #define DEFAULT_USER_LOCK_TIME 30
 #define DEFAULT_ROOT_LOCK_TIME 86400
-#define DEFAULT_MAX_WALL_TIME 10080 // in minutes
+#define DEFAULT_MAX_WALL_TIME 604800 // 7days in sec
 #define DEFAULT_HPC_NAME "intel_laptop"
 
 enum { MAXCONN = 1000 };
