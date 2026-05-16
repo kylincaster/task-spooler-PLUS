@@ -26,8 +26,7 @@
 /* The list will access them */
 int busy_slots = 0;
 int max_slots = 1;
-float sstmp_skip_ms =
-    DEFAULT_EMAIL_TIME; // 200000; // skip task smaller than 200 s
+time_t sstmp_skip_sec = DEFAULT_EMAIL_TIME; // skip task smaller than 200 s
 
 char *email_sender;
 
@@ -74,30 +73,30 @@ void setup_ssmtp() {
         float time_sec;
         int ret = sscanf(time_s, "%f", &time_sec);
         if (ret == 1) {
-            sstmp_skip_ms = time_sec;
+            sstmp_skip_sec = time_sec;
         }
     }
 }
 
 static void send_mail_via_ssmtp(struct Job *p) {
-    double real_ms = p->result.real_ms; // units in second
-    if (real_ms == 0.0) {
-        real_ms = p->info.end_time - p->info.start_time; // TODO add a function
+    time_t real_sec = p->result.real_sec; // units in second
+    if (real_sec == 0) {
+        real_sec = p->info.end_time - p->info.start_time; // TODO add a function
     }
     // skip the short task
-    if (real_ms < sstmp_skip_ms || p->email == NULL) {
+    if (real_sec < sstmp_skip_sec || p->email == NULL) {
         return;
     }
     char const *state =
         (p->result.errorlevel || p->result.signal || p->result.died_by_signal)
             ? "failed"
             : "finished";
-    char const *unit = time_rep(&real_ms);
+    time_repr_t r = format_time(real_sec);
     char cmd[2048];
     snprintf(cmd, 2047,
-             "echo \"Subject: %s[%d] n_core: %d, Elsp %.3f %s from MSI\nFrom: "
+             "echo \"Subject: %s[%d] n_core: %d, Elsp %.3f %c from MSI\nFrom: "
              "TS<%s>\nTo: %s\n\n\n Cmd: %s [%s] Output: %s\" | ssmtp %s",
-             p->label, p->jobid, p->num_slots, real_ms, unit, p->email,
+             p->label, p->jobid, p->num_slots, r.value, r.unit, p->email,
              email_sender, p->command + p->command_strip, state,
              p->output_filename, p->email);
     fork_cmd(root_UID, NULL, cmd);
@@ -105,12 +104,12 @@ static void send_mail_via_ssmtp(struct Job *p) {
 
 static void sound_notify(struct Job *p) {
 #ifdef SOUND
-    float real_ms = p->result.real_ms;
-    if (real_ms == 0.0) {
-        real_ms = p->info.end_time - p->info.start_time; // TODO ADD FUNC
+    time_t real_sec = p->result.real_sec;
+    if (real_sec == 0.0) {
+        real_sec = p->info.end_time - p->info.start_time; // TODO ADD FUNC
     }
     // skip the short task
-    if (real_ms < 5) {
+    if (real_sec < 5) {
         return;
     }
     char cmd[256];
@@ -260,17 +259,17 @@ static int add_job_to_json_array(struct Job *p, cJSON *jobs) {
 
     /* Time */
     if (p->state == FINISHED) {
-        field = cJSON_CreateNumber(p->result.real_ms);
+        field = cJSON_CreateNumber(p->result.real_sec);
         if (field == NULL) {
-            error("Error initializing JSON object for job %i field Time_ms "
+            error("Error initializing JSON object for job %i field [real_sec] "
                   "(value %d).",
-                  p->result.real_ms);
+                  p->result.real_sec);
             return 0;
         }
     } else {
         field = cJSON_CreateNull();
         if (field == NULL) {
-            error("Error initializing JSON object for job %i field Time_ms (no "
+            error("Error initializing JSON object for job %i field [real_sec] (no "
                   "result).");
             return 0;
         }
@@ -1545,7 +1544,7 @@ void job_finished(const struct Result *result, int jobid) {
     notify_errorlevel(p);
 
     pinfo_set_end_time(&p->info);
-    if (result->real_ms == 0) {
+    if (result->real_sec == 0) {
         p->info.start_time = p->info.enqueue_time = p->info.end_time;
     }
 
@@ -1893,31 +1892,34 @@ void s_job_info(int s, int jobid) {
     fd_nprintf(s, 100, "Enqueue time: %s", ctime(&ct));
     ct = p->info.start_time + g_boot_wallclock;
     fd_nprintf(s, 100, "Start time: %s", ctime(&ct));
+    if (p->info.pause_time != 0) {
+        ct = p->info.pause_time + g_boot_wallclock;
+        fd_nprintf(s, 100, "Pause time: %s", ctime(&ct));
+    }
     if (p->state == FINISHED) {
         ct = p->info.end_time + g_boot_wallclock;
         fd_nprintf(s, 100, "End time: %s", ctime(&ct));
     }
 
     
-    {
-        double t_wall = abs(p->wall_time) * 60.0; // minuts -> seconds
-        const char *unit = time_rep(&t_wall);
-        fd_nprintf(s, 100, "Wall-time: %.4f %s\n", t_wall, unit);
-    }
+    time_t t_wall = i64abs(p->wall_time);
+    time_repr_t r = format_time(t_wall);
+    fd_nprintf(s, 100, "Wall-time: %.4f %c\n----\n", r.value, r.unit);
 
-    double t = get_work_time_by_job(p);
-    const char* unit = time_rep(&t);
-    fd_nprintf(s, 100, "Work time: %.4f %s\n", t, unit);
+    time_t t_work = get_work_time_by_job(p);
+    r = format_time(t_work);
+    fd_nprintf(s, 100, "Work time: %.4f %c\n", r.value, r.unit);
     
-    time_t pause_duration = pinfo_get_pause_duration(&(p->info));
+    time_t t_pause = get_pause_time_by_job(p);
+    time_t t_real = t_pause + t_work;
+    double p_rate = (double)(t_pause) / t_real;
+    // more than 5% PAUSE in total work time
+    if (p_rate > 0.05) {
+        r = format_time(t_pause);
+        fd_nprintf(s, 100, "Pause time: %.4f %c\n", r.value, r.unit);
 
-    if (pause_duration > 3) {
-        t = pause_duration;
-        // unit = time_rep(&t);
-        fd_nprintf(s, 100, "Pause time: %.4f %s\n", t, unit);
-        double elapsed = get_work_time_by_job(p) + pause_duration;
-        // unit = time_rep(&elapsed);
-        fd_nprintf(s, 100, "Elapsed time: %.4f %s\n", elapsed, unit);
+        r = format_time(t_real);  // totol Elapsed time
+        fd_nprintf(s, 100, "Elapsed time: %.4f %c\n", r.value, r.unit);
     }
 
     if (p->state == FINISHED) {
@@ -2276,18 +2278,18 @@ static struct Job *get_job(int jobid) {
 }
 
 int s_check_locker(int ts_UID) {
-    int dt = time(NULL) - locker_time;
+    time_t dt = get_monotonic_sec() - locker_time;
     int res;
     if (user_locker != 0 && dt > 30) {
         user_locker = -1;
     }
     if (user_locker == -1) {
-        res = 0;
+        res = 0; // unlocked
     } else {
         if (user_locker == ts_UID) {
-            res = 0;
+            res = 0; // unlocked 
         } else {
-            res = 1;
+            res = 1; // The service is locker by other user or root
         }
     }
     return res;
@@ -2297,12 +2299,12 @@ void s_lock_server(int s, int ts_UID) {
     if (ts_UID == 0) {
         s_update_slots_usage();
         user_locker = 0;
-        locker_time = time(NULL);
+        locker_time = get_monotonic_sec();
         snprintf(buff, 255, "lock the task-spooler server by Root\n");
     } else {
         if (user_locker == -1) {
             user_locker = ts_UID;
-            locker_time = time(NULL);
+            locker_time = get_monotonic_sec();
             snprintf(buff, 255, "lock the task-spooler server by [%d] `%s`\n",
                      user_UID[user_locker], user_name[ts_UID]);
         } else {

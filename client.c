@@ -183,9 +183,9 @@ int c_wait_server_commands() {
       if (command_line.depend_on_size && command_line.require_elevel &&
           m.u.last_errorlevel != 0) {
         result.errorlevel = -1;
-        result.user_ms = 0.;
-        result.system_ms = 0.;
-        result.real_ms = 0.;
+        result.user_sec = 0;
+        result.system_sec = 0;
+        result.real_sec = 0;
         result.skipped = 1;
         c_send_runjob_ok(0, -1);
       } else {

@@ -6,11 +6,40 @@
 #include <ctype.h>
 #include <sys/time.h>
 #include <time.h>
-#include "main.h"
-#include <time.h>
 
+#include "main.h"
 #include "default.inc"
 
+int64_t i64abs(int64_t x)
+{
+    return x < 0 ? -x : x;
+}
+
+time_repr_t format_time(time_t t)
+{
+    time_repr_t out;
+    double time_in_sec = (double)t;
+
+    out.unit = 's';
+
+    if (time_in_sec > 250) {
+        time_in_sec /= 60.0;
+        out.unit = 'm';
+
+        if (time_in_sec > 100) {
+            time_in_sec /= 60.0;
+            out.unit = 'h';
+
+            if (time_in_sec > 50) {
+                time_in_sec /= 24.0;
+                out.unit = 'd';
+            }
+        }
+    }
+
+    out.value = time_in_sec;
+    return out;
+}
 
 static double str2double(const char *str) {
     char *endptr;
@@ -129,7 +158,7 @@ double get_max_wall_time() {
   return DEFAULT_MAX_WALL_TIME;
 }
 
-time_t get_work_time_by_job(struct Job* p) { // return in seconds
+time_t get_work_time_by_job(const struct Job* p) { // return in seconds
     if (p->state == FINISHED) {
         return p->info.end_time - p->info.start_time - p->info.pause_duration;
     }
@@ -137,6 +166,13 @@ time_t get_work_time_by_job(struct Job* p) { // return in seconds
     time_t t = (p->state == PAUSE) ? p->info.pause_time : get_monotonic_sec();
     t -= p->info.start_time + p->info.pause_duration;
     return t;
+}
+time_t get_pause_time_by_job(const struct Job* p) { // return in seconds
+    time_t t_pause = p->info.pause_duration;
+    if (p->state == PAUSE && p->info.pause_time != 0) {
+        t_pause += get_monotonic_sec() - p->info.pause_time;
+    }
+    return t_pause;
 }
 
 double get_cpu_time_by_pid(int pid) {

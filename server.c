@@ -185,9 +185,9 @@ static void check_jobDB() {
       r.errorlevel = -1;
       r.died_by_signal = 1;
       r.signal = SIGKILL;
-      r.user_ms = 0;
-      r.system_ms = 0;
-      r.real_ms = 0;
+      r.user_sec = 0;
+      r.system_sec = 0;
+      r.real_sec = 0;
       r.skipped = 0;
 
       // warning("JobID %i quit while running.", jobid);
@@ -441,9 +441,9 @@ static void clean_after_client_disappeared(int socket, int index) {
     r.errorlevel = -1;
     r.died_by_signal = 1;
     r.signal = SIGKILL;
-    r.user_ms = 0;
-    r.system_ms = 0;
-    r.real_ms = 0;
+    r.user_sec = 0;
+    r.system_sec = 0;
+    r.real_sec = 0;
     r.skipped = 0;
 
     warning("JobID %i quit while running.", jobid);
@@ -502,7 +502,7 @@ static enum Break client_read(int index) {
 
   // Time-out unlock
   if (user_locker > 0) { // locked by no-root user
-    time_t dt = time(NULL) - locker_time;
+    time_t dt = get_monotonic_sec() - locker_time;
     if (user_locker == 0 && dt > DEFAULT_ROOT_LOCK_TIME) {
       user_locker = -1;
     } else if (dt > DEFAULT_USER_LOCK_TIME) {
