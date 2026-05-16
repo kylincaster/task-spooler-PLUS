@@ -145,7 +145,7 @@ struct CommandLine {
   int taskpid;       /* to restore task by pid */
   int require_elevel; /* whether requires error level of dependencies or not */
   time_t start_time;
-  long wall_time;
+  int64_t wall_time;
   enum ListFormat list_format;
 };
 
@@ -201,9 +201,9 @@ struct Msg {
       int errorlevel;
       int died_by_signal;
       int signal;
-      float user_ms;
-      float system_ms;
-      float real_ms;
+      time_t user_sec;
+      time_t system_sec;
+      time_t real_sec;
       int skipped;
     } result;
     int size;
@@ -247,7 +247,7 @@ struct Job {
   int store_output;
   int pid;
   int ts_UID;
-  int wall_time; /* wall-time limit */
+  int64_t wall_time; /* wall-time limit */
   int should_keep_finished;
   int *depend_on;
   int depend_on_size;
@@ -510,8 +510,6 @@ char *joblistdump_torun(const struct Job *p);
 
 char *joblistdump_headers();
 
-const char *time_rep(double *t);
-
 /* print.c */
 int fd_nprintf(int fd, int maxsize, const char *fmt, ...);
 
@@ -534,7 +532,6 @@ void pinfo_set_end_time(struct Procinfo *p);
 
 void pinfo_set_pause_time(struct Procinfo *p);
 void pinfo_set_pause_duration(struct Procinfo *p);
-time_t pinfo_get_pause_duration(struct Procinfo *p);
 
 void pinfo_init(struct Procinfo *p);
 
@@ -573,11 +570,17 @@ int is_sleep(int pid);
 // int check_running_dead(int jobid);
 
 /* runtime_limit.c */
+typedef struct {
+    double value;  // 转换后的数值
+    char unit;     // 单位：s/m/h/d
+} time_repr_t;
+time_repr_t format_time(time_t t);
+int64_t i64abs(int64_t x);
 double get_cpu_time_by_pid(int pid);
 double get_max_wall_time();
-
 int parse_time(const char *s, time_t *out);
-time_t get_work_time_by_job(struct Job* p);
+time_t get_work_time_by_job(const struct Job* p);
+time_t get_pause_time_by_job(const struct Job* p);
 time_t get_monotonic_sec();
 
 /* cgroups.c */

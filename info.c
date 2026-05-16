@@ -121,14 +121,6 @@ void pinfo_set_pause_duration(struct Procinfo *p)
     }
 }
 
-time_t pinfo_get_pause_duration(struct Procinfo *p) {
-    time_t duration = p->pause_duration;
-    if (p->pause_time != 0) {
-        duration += get_monotonic_sec() - p->pause_time;
-    }
-    return duration;
-}
-
 void pinfo_set_end_time(struct Procinfo *p)
 {
     p->end_time = get_monotonic_sec();

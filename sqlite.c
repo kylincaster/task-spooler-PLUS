@@ -109,7 +109,7 @@ int open_sqlite() {
       "num_slots INT NOT NULL, "
       "errorlevel INT NOT NULL, died_by_signal INT NOT NULL, signal INT NOT "
       "NULL, "
-      "user_ms FLOAT NOT NULL, system_ms FLOAT NOT NULL, real_ms FLOAT NOT "
+      "user_sec INT NOT NULL, system_sec INT NOT NULL, real_sec INT NOT "
       "NULL, skipped INT NOT NULL, "
       "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
@@ -149,7 +149,7 @@ int open_sqlite() {
       "num_slots INT NOT NULL, "
       "errorlevel INT NOT NULL, died_by_signal INT NOT NULL, signal INT NOT "
       "NULL, "
-      "user_ms FLOAT NOT NULL, system_ms FLOAT NOT NULL, real_ms FLOAT NOT "
+      "user_sec INT NOT NULL, system_sec INT NOT NULL, real_sec INT NOT "
       "NULL, skipped INT NOT NULL, "
       "ptr TEXT NOT NULL, nchars INT NOT NULL, allocchars INT NOT NULL, wall_time INT NOT NULL,"
       "enqueue_time INT NOT NULL, start_time INT NOT NULL, end_time INT NOT "
@@ -244,14 +244,14 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       "ts_UID, should_keep_finished, depend_on, depend_on_size,"
       "notify_errorlevel_to, notify_errorlevel_to_size, "
       "dependency_errorlevel,label,email,num_slots,errorlevel,died_by_signal,"
-      "signal,user_ms,system_ms,real_ms,skipped,"
+      "signal,user_sec,system_sec,real_sec,skipped,"
       "ptr,nchars,allocchars,wall_time,"
       "enqueue_time,start_time,end_time,"
       "enqueue_time_ms,start_time_ms,end_time_ms, "
       "order_id, command_strip, work_dir)"
       "VALUES (%d,'%s',%d,'%s',%d,%d,%d,%d,'%s',%d,'%s',%d,%d,'%s','%s',%d,"
-      "%d,%d,%d,%f,%f,%f,%d,"
-      "'%s',%d,%d,%d,'%ld','%ld','%ld','%ld','%ld','%ld', "
+      "%d,%d,%d,%ld,%ld,%ld,%d,"
+      "'%s',%d,%d,%ld,'%ld','%ld','%ld','%ld','%ld','%ld', "
       "%d, %d,'%s');",
       action, table, job->jobid, job->command, job->state, job->output_filename,
       job->store_output, job->pid, job->ts_UID, job->should_keep_finished,
@@ -259,7 +259,7 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       job->depend_on_size, notify_errorlevel_to, job->notify_errorlevel_to_size,
       job->dependency_errorlevel, label, email, job->num_slots,
       result->errorlevel, result->died_by_signal, result->signal,
-      result->user_ms, result->system_ms, result->real_ms, result->skipped,
+      result->user_sec, result->system_sec, result->real_sec, result->skipped,
       info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
       info->start_time, info->end_time,
       0, 0, 0, // TODO
@@ -465,9 +465,9 @@ struct Job *read_DB(int jobid, const char *table) {
     result->errorlevel = sqlite3_column_int(stmt, 16);
     result->died_by_signal = sqlite3_column_int(stmt, 17);
     result->signal = sqlite3_column_int(stmt, 18);
-    result->user_ms = (float)sqlite3_column_double(stmt, 19);
-    result->system_ms = (float)sqlite3_column_double(stmt, 20);
-    result->real_ms = (float)sqlite3_column_double(stmt, 21);
+    result->user_sec = sqlite3_column_int(stmt, 19);
+    result->system_sec = sqlite3_column_int(stmt, 20);
+    result->real_sec = sqlite3_column_int(stmt, 21);
     result->skipped = sqlite3_column_int(stmt, 22);
 
     strcpy(sql, (const char *)sqlite3_column_text(stmt, 23));

@@ -138,13 +138,12 @@ static void run_relink(int pid, struct Result *result) {
   hook_on_finish(command_line.jobid, result->errorlevel, ofname, command);
 
   /* Calculate times */
-  time_t endtv = get_monotonic_sec();
-  result->real_ms = endtv - command_line.start_time;
   times(&cpu_times);
   /* The times are given in clock ticks. The number of clock ticks per second
    * is obtained in POSIX using sysconf(). */
-  result->user_ms = (float)cpu_times.tms_cutime / (float)sysconf(_SC_CLK_TCK);
-  result->system_ms = (float)cpu_times.tms_cstime / (float)sysconf(_SC_CLK_TCK);
+  result->real_sec   = get_monotonic_sec() - command_line.start_time;
+  result->user_sec   = (time_t)(cpu_times.tms_cutime) / sysconf(_SC_CLK_TCK);
+  result->system_sec = (time_t)(cpu_times.tms_cstime) / sysconf(_SC_CLK_TCK);
 
   free(command);
   free(ofname);
@@ -156,7 +155,7 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   int namesize;
   int res;
   char *command;
-  time_t starttv, endtv;
+  time_t starttv; //, endtv;
   struct tms cpu_times;
 
   /* Read the filename */
@@ -210,13 +209,12 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   hook_on_finish(command_line.jobid, result->errorlevel, ofname, command);
 
   /* Calculate times */
-  endtv = get_monotonic_sec();
-  result->real_ms = endtv - starttv;
   times(&cpu_times);
   /* The times are given in clock ticks. The number of clock ticks per second
    * is obtained in POSIX using sysconf(). */
-  result->user_ms = (float)cpu_times.tms_cutime / (float)sysconf(_SC_CLK_TCK);
-  result->system_ms = (float)cpu_times.tms_cstime / (float)sysconf(_SC_CLK_TCK);
+  result->real_sec   = get_monotonic_sec() - starttv;
+  result->user_sec   = (time_t)cpu_times.tms_cutime / sysconf(_SC_CLK_TCK);
+  result->system_sec = (time_t)cpu_times.tms_cstime / sysconf(_SC_CLK_TCK);
 
   free(command);
   free(ofname);
