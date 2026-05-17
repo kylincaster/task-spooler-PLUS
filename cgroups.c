@@ -232,7 +232,7 @@ int cgroups_thaw_job(const struct Job* p) {
 
 int cgroup_v1_cleanup_freezer(const char* group) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/%s", group);
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/%s", group);
 
     /* 先解冻，再删除 */
     // 从 group 名解析出 freezer 路径并解冻
@@ -366,7 +366,7 @@ void cgroup_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) 
             continue;
         }
         if (s_check_running_pid(pid) == 0) {
-            printf("[CLEAN] dead task: %s\n", ent->d_name);
+            printf("[CLEAN] dead task: %s%s\n", spool_dir, ent->d_name);
             cleanup_func(ent->d_name);
         }
     }
