@@ -54,7 +54,7 @@ int max_jobs;
 
 static struct Job *get_job(int jobid);
 static int fork_cmd(int UID, char const *path, char const *cmd);
-static int safe_pause_pid(struct Job *p);
+static int safe_pause_job(struct Job *p);
 
 void notify_errorlevel(struct Job *p);
 
@@ -141,6 +141,7 @@ static void destroy_job(struct Job *p) {
 static void pause_job_config(struct Job* p) {
     if (p->info.pause_time == 0) {
         p->info.pause_time = get_monotonic_sec();
+        // printf("set pause_time at %ld\n", p->info.pause_time);
         update_field_int64("Jobs", p->jobid, "pause_time", p->info.pause_time);
     }
 }
@@ -171,10 +172,12 @@ static int config_running(struct Job *p) {
     if (p == NULL || (p->state != PAUSE && p->state != QUEUED)) {
         return 1;
     }
-    if (is_sleep(p->pid)) {
-        kill_pids(p->pid, SIGCONT, NULL);
+    printf("config running %d, is_sleep %d\n", p->jobid, is_sleep(p));
+    if (is_sleep(p) == 1) {
+        cgroups_thaw_job(p);
     }
-    printf("Start job[%d]: PID: %d\n", p->jobid, p->pid);
+
+    // printf("Start job[%d]: PID: %d\n", p->jobid, p->pid);
     int ts_UID = p->ts_UID;
     user_busy[ts_UID] += p->num_slots;
     busy_slots += p->num_slots;
@@ -392,14 +395,14 @@ static int check_timeout(struct Job *p) {
         return 0;
     }
 
-    double wall_time = i64abs(p->wall_time);
-    double job_time = get_work_time_by_job(p);
-    if (job_time <= wall_time || job_time < 3) {
+    time_t wall_time = i64abs(p->wall_time);
+    time_t work_time = get_work_time_by_job(p);
+    if (work_time <= wall_time || work_time < 3) {
         return 0;
     }
 
-    printf("Job[%d|pid:%d] is time-out %.3f sec (limit %.3f)\n", p->jobid, p->pid, job_time, wall_time);
-    if (safe_pause_pid(p) == 0) {
+    printf("Job[%d|pid:%d] is time-out %ld sec (limit %ld)\n", p->jobid, p->pid, work_time, wall_time);
+    if (safe_pause_job(p) == 0) {
         p->wall_time = -i64abs(p->wall_time) - 86400; // plus 24 hrs
         update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
         p->state = PAUSE;
@@ -781,7 +784,7 @@ void s_mark_job_running(int jobid) {
         if (p->output_filename == NULL) {
             p->output_filename = get_ofile_from_FD(p->pid);
         }
-        if (is_sleep(p->pid) == 1) {
+        if (is_sleep(p) == 1) {
             p->state = PAUSE;
             return;
         } else {
@@ -1425,13 +1428,12 @@ int next_run_job() {
                     return p->jobid;
                 }
         } else if (p->state == PAUSE && p->wall_time < 0) {
-          double cpu_time = get_cpu_time_by_pid(p->pid);
-          double wall_time = abs(p->wall_time) * 60; // minuts -> seconds
+          time_t cpu_time = get_cpu_time_by_pid(p->pid);
+          time_t wall_time = i64abs(p->wall_time);
           if (wall_time > cpu_time) {
             int num_slots = p->num_slots, id = p->ts_UID;
             if (id == uid && free_slots >= num_slots &&
               user_max_slots[id] - user_busy[id] >= num_slots) {
-              kill_pids(p->pid, SIGCONT, NULL);
               config_running(p);
             }
           }
@@ -1759,8 +1761,8 @@ void s_check_holdon() {
     p = firstjob.next;
     while (p != 0) {
         if (p->pid != 0 && p->state == PAUSE) {
-            if (is_sleep(p->pid) == 0) {
-                kill_pids(p->pid, SIGSTOP, NULL);
+            if (is_sleep(p) == 0) {
+                cgroups_freeze_job(p);
             }
         }
         p = p->next;
@@ -1880,7 +1882,7 @@ void s_job_info(int s, int jobid) {
     }
     char const *status = "";
     if (p->state != FINISHED) {
-        if (p->state != PAUSE && is_sleep(p->pid)) {
+        if (p->state != PAUSE && is_sleep(p) == 1) {
             status = " in SLEEP!";
         }
     }
@@ -1931,7 +1933,7 @@ void s_job_info(int s, int jobid) {
     time_t t_real = t_pause + t_work;
     double p_rate = (double)(t_pause) / t_real;
     // more than 5% PAUSE in total work time
-    if (p_rate > 0.05) {
+    if (p_rate > 0.05 || 1) {
         r = format_time(t_pause);
         fd_nprintf(s, 100, "Pause time: %.4f %c\n", r.value, r.unit);
 
@@ -1962,7 +1964,6 @@ void s_refresh_users(int s) {
 }
 
 void s_suspend_user_all(int s) {
-    s_update_slots_usage();
     for (int i = 1; i < user_number; i++) {
         s_suspend_user(s, i);
     }
@@ -2005,7 +2006,7 @@ void s_suspend_user(int s, int ts_UID) {
         return;
     }
 
-    user_max_slots[ts_UID] = -abs(user_max_slots[ts_UID]);
+    user_max_slots[ts_UID] = -abs(user_max_slots[ts_UID]); // set
     user_locked[ts_UID] = 1;
 
     struct Job *p = firstjob.next;
@@ -2013,10 +2014,10 @@ void s_suspend_user(int s, int ts_UID) {
         if (p->ts_UID == ts_UID && p->state == RUNNING) {
             // p->state = HOLDING_CLIENT;
             if (p->pid != 0) {
-                safe_pause_pid(p);
+                safe_pause_job(p);
                 p->state = PAUSE;
             } else {
-                char *label = "(...)";
+                const char *label = "(...)";
                 if (p->label != NULL) {
                     label = p->label;
                 }
@@ -2031,6 +2032,7 @@ void s_suspend_user(int s, int ts_UID) {
     snprintf(buff, 255, "Suspend user: [%04d] %-20s\n", user_UID[ts_UID],
              user_name[ts_UID]);
     send_list_line(s, buff);
+    s_update_slots_usage();
 }
 
 void s_send_output(int s, int jobid) {
@@ -2384,10 +2386,16 @@ static void s_unlock_queue(struct Job *p) {
     }
 }
 
-static int safe_pause_pid(struct Job *p) {
+static int safe_pause_job(struct Job *p) {
+    cgroups_freeze_job(p);
+    free_cores(p);
+    pause_job_config(p);
+    return 0;
+    /*
     kill(p->pid, SIGSTOP);
     kill_pids(p->pid, SIGSTOP, NULL);
-    if (is_sleep(p->pid) == 1) {
+    usleep(10000);
+    if (is_sleep(p) == 1) {
         free_cores(p);
         pause_job_config(p);
         return 0;
@@ -2395,6 +2403,7 @@ static int safe_pause_pid(struct Job *p) {
         kill_pids(p->pid, SIGCONT, NULL);
         return 1;
     }
+    */
 }
 
 void s_hold_job(int s, int jobid, int ts_UID) {
@@ -2434,7 +2443,7 @@ void s_hold_job(int s, int jobid, int ts_UID) {
     }
 
     if (p->state == PAUSE) {
-        snprintf(buff, 255, "job [%d] is aleady in HOLDON.\n", jobid);
+        snprintf(buff, 255, "The job [%d] is already in PAUSE.\n", jobid);
         send_list_line(s, buff);
         return;
     }
@@ -2442,7 +2451,7 @@ void s_hold_job(int s, int jobid, int ts_UID) {
     int job_tsUID = p->ts_UID;
     if (p->pid != 0 && (job_tsUID = ts_UID || ts_UID == 0)) {
         // kill_pid(p->pid, "kill -s STOP", NULL);
-        if (safe_pause_pid(p) == 0) {
+        if (safe_pause_job(p) == 0) {
             p->state = PAUSE;
             snprintf(buff, 255, "To pause job [%d] successfully!\n", jobid);
         } else {
@@ -2493,11 +2502,12 @@ void s_cont_job(int s, int jobid, int ts_UID) {
         return;
     }
 
+    p->wall_time = i64abs(p->wall_time);
     if (p->state == RUNNING) {
-        if (is_sleep(p->pid) == 0) {
-            snprintf(buff, 255, "job [%d] is aleady in RUNNING.\n", jobid);
+        if (is_sleep(p) == 0) {
+            snprintf(buff, 255, "job [%d] is already in RUNNING.\n", jobid);
         } else {
-            kill_pids(p->pid, SIGCONT, NULL);
+            cgroups_thaw_job(p);
             snprintf(buff, 255, "job [%d] is continued.\n", jobid);
         }
     } else {
@@ -2512,13 +2522,13 @@ void s_cont_job(int s, int jobid, int ts_UID) {
                 }
                 snprintf(buff, 255, "To rerun job [%d] successfully!\n", jobid);
             } else {
-                snprintf(buff, 255, "Error: not enough slots [%d]\n", jobid);
+                snprintf(buff, 255, "Not enough slots for job [%d], set as time-out wait\n", jobid);
+                p->wall_time = -i64abs(p->wall_time); // set as time-out wait
             }
         } else {
             snprintf(buff, 255, "Error: cannot rerun job [%d]\n", jobid);
         }
     } // p->pid
-    p->wall_time = i64abs(p->wall_time);
     send_list_line(s, buff);
 }
 
