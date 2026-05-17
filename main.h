@@ -562,7 +562,7 @@ char *charArray_string(int num, char** array);
 int user_locker;
 time_t locker_time;
 int jobsort_flag;
-int is_sleep(int pid);
+int is_sleep(const struct Job* p);
 // int check_running_dead(int jobid);
 
 /* runtime_limit.c */
@@ -584,6 +584,9 @@ time_t get_monotonic_sec();
 void cgroups_create_job(const struct Job *p);
 void cgroups_clean_job(const struct Job *p);
 void cgroups_clean_all_finished();
+int cgroups_thaw_job(const struct Job* p);
+int cgroups_freeze_job(const struct Job* p);
+int cgroups_is_frozen(const struct Job* p);
 
 /* jobs.c */
 void s_user_status_all(int s);

@@ -18,31 +18,32 @@ extern int busy_slots;
 extern int max_slots;
 
 /* return 0 for running and 1 for sleep and -1 for error */
-int is_sleep(int pid) {
-  if (pid == 0) return -1;
-  char filename[256];
-  char name[256];
-  char status = '\0';
-  FILE *fp = NULL;
-  snprintf(filename, 256, "/proc/%d/stat", pid);
+int is_sleep(const struct Job* p) {
+    int pid = p->pid;  
+    if (pid <= 0) return -1;
+    if (cgroups_is_frozen(p) == 1) {
+      return 1;
+    }
 
-  fp = fopen(filename, "r");
-  if (fp == NULL) {
-    fprintf(stderr, "Error: Couldn't open [%s] in in_sleep(PID)\n", filename);
-    return -1;
-  }
-  int token = fscanf(fp, "%d %s %c", &pid, name, &status);
-  if (token < 3) {
-    fprintf(stderr, "Error: not enough (3) tokens in_sleep(PID)\n");
-    return -1;
-  }
-  fclose(fp);
+    char filename[256];
+    char status;
 
-  if (status == 'T') {
-    return 1;
-  } else {
-    return 0;
-  }
+    snprintf(filename, sizeof(filename), "/proc/%d/stat", pid);
+
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    int ret = fscanf(fp, "%*d (%*[^)]) %c", &status);
+
+    fclose(fp);
+
+    if (ret != 1) {
+        return -1;
+    }
+
+    return (status == 'T' || status == 't');
 }
 
 static char *shorten(char *line, int len) {
@@ -138,13 +139,13 @@ static char *print_noresult(const struct Job *p) {
     if (p->pid == 0) {
       jobstate = "N/A";
     } else {
-      if (is_sleep(p->pid) == 1) {
+      if (is_sleep(p) == 1) {
         jobstate = "sleep  ";
       }
     }
   }
 
-  if (p->state == PAUSE && is_sleep(p->pid) == 1) {
+  if (p->state == PAUSE && is_sleep(p) == 1) {
     if (p->wall_time < 0) {
       jobstate = "timeout"; // TODO delete this
     } else {
