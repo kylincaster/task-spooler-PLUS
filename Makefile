@@ -10,6 +10,10 @@ OBJECTS=main.o \
 	client.o \
 	msgdump.o \
 	jobs.o \
+	notify.o \
+	job_ops.o \
+	server_user.o \
+	server_env.o \
 	execute.o \
 	msg.o \
 	mail.o \
@@ -25,7 +29,8 @@ OBJECTS=main.o \
 	sqlite.o \
 	runtime_limit.o \
 	cgroups.o \
-	vec.o
+	vec.o \
+	utils.o
 
 TARGET=ts
 INSTALL=install -c
@@ -52,6 +57,10 @@ server.o: server.c main.h
 client.o: client.c main.h
 msgdump.o: msgdump.c main.h
 jobs.o: jobs.c main.h
+notify.o: notify.c main.h
+job_ops.o: job_ops.c main.h
+server_user.o: server_user.c main.h
+server_env.o: server_env.c main.h
 execute.o: execute.c main.h
 msg.o: msg.c main.h
 mail.o: mail.c main.h
