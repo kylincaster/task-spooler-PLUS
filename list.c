@@ -155,7 +155,8 @@ static char *print_noresult(const struct Job *p) {
 
   output_filename = ofilename_shown(p);
 
-  char *uname = user_name[p->ts_UID];
+  char *uname = (p->ts_UID >= 0 && p->ts_UID < USER_MAX)
+                    ? user_name[p->ts_UID] : "???";
   maxlen = 4 + 1 + 10 + 1 + 20 + 1 + 8 + 1 + 25 + 1 + strlen(p->command) + 20 +
            strlen(uname) + 240 +
            strlen(output_filename); /* 20 is the margin for errors */
@@ -240,7 +241,8 @@ static char *print_result(const struct Job *p) {
   jobstate = jstate2string_result(p);
   output_filename = ofilename_shown(p);
 
-  char *uname = user_name[p->ts_UID];
+  char *uname = (p->ts_UID >= 0 && p->ts_UID < USER_MAX)
+                    ? user_name[p->ts_UID] : "???";
   maxlen = 4 + 1 + 10 + 1 + 20 + 1 + 8 + 1 + 25 + 1 + strlen(p->command) + 20 +
            strlen(uname) + 240 +
            strlen(output_filename); /* 20 is the margin for errors */
@@ -301,7 +303,8 @@ static char *plainprint_noresult(const struct Job *p) {
 
   jobstate = jstate2string(p->state);
   output_filename = ofilename_shown(p);
-  char *uname = user_name[p->ts_UID];
+  char *uname = (p->ts_UID >= 0 && p->ts_UID < USER_MAX)
+                    ? user_name[p->ts_UID] : "???";
   maxlen = 4 + 1 + 10 + 1 + 20 + 1 + 8 + 1 + 25 + 1 + strlen(p->command) + 20 +
            strlen(uname) + 2; /* 20 is the margin for errors */
 

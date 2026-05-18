@@ -126,6 +126,7 @@ void c_new_job() {
 
   // free(new_command);
   free(myenv);
+  free(old_command);
 }
 
 static void c_print_line(struct Msg* m) {
@@ -396,7 +397,7 @@ void c_send_runjob_ok(const char *ofname, pid_t pid) {
   send_msg(server_socket, &m);
 
   /* Send the filename */
-  if (command_line.store_output)
+  if (m.u.output.store_output)
     send_bytes(server_socket, ofname, m.u.output.ofilename_size);
 }
 
@@ -607,7 +608,7 @@ void c_kill_all_jobs() {
   switch (m.type) {
   case COUNT_RUNNING:
     for (int i = 0; i < m.u.count_running; ++i) {
-      pid_t pid;
+      int pid;
       res = recv(server_socket, &pid, sizeof(int), 0);
       if (res != sizeof(int))
         error("Error in receiving PID kill_all");

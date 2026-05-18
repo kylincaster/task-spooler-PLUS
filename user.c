@@ -44,7 +44,7 @@ int get_env(const char *env, int v0) {
 //按空格自动分割子串的函数
 char **split_str(const char *str0, int *size) {
   char **result = (char **)malloc(sizeof(char *)); //存储分割后的子串
-  char *str = (char *)malloc(sizeof(char) * strlen(str0));
+  char *str = (char *)malloc(sizeof(char) * (strlen(str0) + 1));
   strcpy(str, str0);
   int n = 0;                //数组的大小
   char *token;              //分割得到的子串
@@ -86,11 +86,11 @@ char* linux_cmd(char* CMD, char* out, int out_size) {
 */
 
 int64_t str2int64(const char *str) {
-  int64_t i;
-  if (sscanf(str, "%ld", &i) == 0) {
+  long long i;
+  if (sscanf(str, "%lld", &i) != 1) {
     error("Error: in convert %s to int64_t\n", str);
   }
-  return i;
+  return (int64_t)i;
 }
 
 const char *set_server_logfile() {
@@ -158,13 +158,20 @@ int read_first_jobid_from_logfile(const char *path) {
 
   while ((read = getline(&line, &len, fp)) != -1) {
   }
+  fclose(fp);
+
+  if (line == NULL) {
+    free(line);
+    return 999 + 1;
+  }
+
   int res = sscanf(line, "[%d]", &jobid);
-  if (jobid <= 0 || res != 1) {
+  if (res != 1 || jobid <= 0) {
     jobid = 999;
   }
 
   printf("last line is %s with jobid = %d\n", line, jobid);
-  fclose(fp);
+  free(line);
   return jobid + 1;
 }
 
@@ -188,14 +195,14 @@ void read_user_file(const char *path) {
       continue;
     if (strncmp("TS_SLOTS", line, 8) == 0) {
       int res = sscanf(line, "TS_SLOTS = %d", &slots);
-      if (slots > 0 && res == 1) {
+      if (res == 1 && slots > 0) {
         printf("TS_SLOTS = %d\n", slots);
         s_set_max_slots(0, slots);
         continue;
       }
     } else if (strncmp("TS_FIRST_JOBID", line, 14) == 0) {
       int res = sscanf(line, "TS_FIRST_JOBID = %d", &slots);
-      if (slots > 0 && res == 1) {
+      if (res == 1 && slots > 0) {
         printf("TS_FIRST_JOBID = %d\n", slots);
         s_set_jobids(slots);
         continue;
@@ -217,6 +224,7 @@ void read_user_file(const char *path) {
         user_UID[ts_UID] = UID;
         user_max_slots[ts_UID] = slots;
         strncpy(user_name[ts_UID], name, USER_NAME_WIDTH - 1);
+        user_name[ts_UID][USER_NAME_WIDTH - 1] = '\0';
       } else {
         user_max_slots[ts_UID] = slots;
       }
@@ -299,7 +307,7 @@ void kill_pids(int parent_pid, int signal, const char* cmd) {
     snprintf(path, sizeof(path), "/proc/%d/task/%d/children", parent_pid, tid);
 
     FILE *file = fopen(path, "r");
-    if (path == NULL) {
+    if (file == NULL) {
       printf("cannot open %s\n", path);
       continue;
     }

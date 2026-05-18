@@ -438,7 +438,7 @@ static void clean_after_client_disappeared(int socket, int index) {
 
 static void s_remove_all_queues(int ts_UID) {
   int i = 0;
-  while(i < nconnections - 1) {
+  while(i < nconnections) {
     if (ts_UID == 0 || client_cs[i].ts_UID == ts_UID) {
       if (job_is_running(client_cs[i].jobid) != 1) {
         clean_after_client_disappeared(client_cs[i].socket, i);
@@ -472,13 +472,13 @@ static enum Break client_read(int index) {
   // printf("client_read(%d), m.type = %d\n", index, m.type);
   int ts_UID = client_cs[index].ts_UID;
 
-  // Time-out unlock
-  if (user_locker > 0) { // locked by no-root user
+  /* Time-out unlock */
+  if (user_locker >= 0) {
     time_t dt = get_monotonic_sec() - locker_time;
-    if (user_locker == 0 && dt > DEFAULT_ROOT_LOCK_TIME) {
-      user_locker = -1;
-    } else if (dt > DEFAULT_USER_LOCK_TIME) {
-      user_locker = -1;
+    if (user_locker == 0) {
+      if (dt > DEFAULT_ROOT_LOCK_TIME) user_locker = -1;
+    } else {
+      if (dt > DEFAULT_USER_LOCK_TIME) user_locker = -1;
     }
   }
 

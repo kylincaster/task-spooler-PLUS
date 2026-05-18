@@ -1,4 +1,5 @@
 #include "vec.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,6 +30,7 @@ int vec_push(vec_t *v, void *item)
 {
     if (!v || !v->data) return -1;
     if (v->size >= v->capacity) {
+        if (v->capacity > SIZE_MAX / 2) return -1;
         if (vec_reserve(v, v->capacity * 2) != 0) return -1;
     }
     v->data[v->size++] = item;
@@ -59,6 +61,7 @@ int vec_insert(vec_t *v, size_t index, void *item)
 {
     if (!v || !v->data || index > v->size) return -1;
     if (v->size >= v->capacity) {
+        if (v->capacity > SIZE_MAX / 2) return -1;
         if (vec_reserve(v, v->capacity * 2) != 0) return -1;
     }
     memmove(&v->data[index + 1], &v->data[index], (v->size - index) * sizeof(void *));
