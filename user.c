@@ -73,18 +73,6 @@ void write_logfile(const struct Job *p) {
   fclose(f);
 }
 
-void debug_write(const char *str) {
-  FILE *f = fopen(logfile_path, "a");
-  if (f == NULL) {
-    return;
-  }
-  char buf[100];
-  time_t now = time(0);
-  strftime(buf, 100, "%Y-%m-%d %H:%M:%S", localtime(&now));
-  fprintf(f, "%s @ %s\n", buf, str);
-  fclose(f);
-}
-
 /*
 static int find_user_by_name(const char *name) {
   for (int i = 0; i < user_number; i++) {
