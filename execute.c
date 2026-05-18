@@ -257,7 +257,7 @@ static void run_gzip(int fd_out, int fd_in) {
 
 static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
   char *outfname;
-  char errfname[sizeof outfname + 2]; /* .e */
+  char errfname[4100]; /* .e */
   char jobid_str[100];
 
   int namesize;
@@ -316,9 +316,9 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
         strncpy(errfname, outfname_full, sizeof errfname);
         strncat(errfname, ".e", 2 + 1);
         errfd = open(errfname, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-        assert(err == 0);
+        assert(errfd != -1);
         err = dup2(errfd, 2);
-        assert(err == 0);
+        assert(err != -1);
         err = close(errfd);
         assert(err == 0);
       } else {

@@ -186,7 +186,7 @@ static void rerun_job_config(struct Job* p) {
 }
 
 static void free_cores(struct Job *p) {
-    if (p == NULL && p->num_allocated == 0) {
+    if (p == NULL || p->num_allocated == 0) {
         return;
     }
     int ts_UID = p->ts_UID;
@@ -310,15 +310,15 @@ static int add_job_to_json_array(struct Job *p, cJSON *jobs) {
         field = cJSON_CreateNumber(p->result.real_sec);
         if (field == NULL) {
             error("Error initializing JSON object for job %i field [real_sec] "
-                  "(value %d).",
-                  p->result.real_sec);
+                  "(value %ld).",
+                  p->jobid, (long)p->result.real_sec);
             return 0;
         }
     } else {
         field = cJSON_CreateNull();
         if (field == NULL) {
             error("Error initializing JSON object for job %i field [real_sec] (no "
-                  "result).");
+                  "result).", p->jobid);
             return 0;
         }
     }
@@ -707,7 +707,7 @@ void s_send_cmd(int s, int jobid) {
 
 static char *get_ofile_from_FD(int pid) {
     char path[256], buff[256] = "";
-    snprintf(path, 255, "/proc/%d/fd/1", command_line.taskpid);
+    snprintf(path, 255, "/proc/%d/fd/1", pid);
     int len = readlink(path, buff, sizeof(buff));
 
     // printf("path = %s, buff = %s\n", path, buff);
@@ -1763,7 +1763,7 @@ void s_resume_user_all(int s) {
 }
 
 void s_resume_user(int s, int ts_UID) {
-    if (ts_UID < 0 || ts_UID > USER_MAX) return;
+    if (ts_UID < 0 || ts_UID >= USER_MAX) return;
 
     user_max_slots[ts_UID] = abs(user_max_slots[ts_UID]);
     user_locked[ts_UID] = 0;
@@ -1781,7 +1781,7 @@ void s_resume_user(int s, int ts_UID) {
 }
 
 void s_suspend_user(int s, int ts_UID) {
-    if (ts_UID < 0 || ts_UID > USER_MAX) return;
+    if (ts_UID < 0 || ts_UID >= USER_MAX) return;
 
     user_max_slots[ts_UID] = -abs(user_max_slots[ts_UID]);
     user_locked[ts_UID] = 1;
@@ -2195,7 +2195,7 @@ void s_hold_job(int s, int jobid, int ts_UID) {
     }
 
     int job_tsUID = p->ts_UID;
-    if (p->pid != 0 && (job_tsUID = ts_UID || ts_UID == 0)) {
+    if (p->pid != 0 && (job_tsUID == ts_UID || ts_UID == 0)) {
         // kill_pid(p->pid, "kill -s STOP", NULL);
         if (safe_pause_job(p) == 0) {
             p->state = PAUSE;
@@ -2258,7 +2258,7 @@ void s_cont_job(int s, int jobid, int ts_UID) {
         }
     } else {
         int job_tsUID = p->ts_UID;
-        if (p->pid != 0 && (job_tsUID = ts_UID || ts_UID == 0)) {
+        if (p->pid != 0 && (job_tsUID == ts_UID || ts_UID == 0)) {
             int num_slots = p->num_slots;
             if (user_busy[ts_UID] + num_slots <= user_max_slots[ts_UID] &&
                 busy_slots + num_slots <= max_slots) {

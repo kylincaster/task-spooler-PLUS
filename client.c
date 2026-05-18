@@ -904,7 +904,7 @@ void c_add_wtime() {
   if (client_uid != 0) {
     error("Error: Only the root can change the job's wall time!\n");
   }
-  if (m.jobid == 0) {
+  if (command_line.jobid == 0) {
     error("Error: job ID is not specified. "
           "Use --job [jobid] or -J [jobid].\n");
   }
