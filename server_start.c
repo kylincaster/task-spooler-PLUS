@@ -169,7 +169,7 @@ void notify_parent(int fd) {
 
 int ensure_server_up(int daemonFlag) {
   int res;
-  int notify_fd;
+  int notify_fd = -1;
   server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
   if (server_socket == -1)
     error("getting the server socket");
@@ -212,7 +212,9 @@ int ensure_server_up(int daemonFlag) {
            "allowed option.\n");
   }
 
-  wait_server_up(notify_fd);
+  if (notify_fd != -1) {
+    wait_server_up(notify_fd);
+  }
   res = try_connect(server_socket);
 
   

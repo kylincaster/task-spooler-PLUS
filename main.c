@@ -105,19 +105,17 @@ char *get_tmp() {
     return NULL;
   }
 
-  srand(time(NULL));
-  uint randomNumber1 = rand() % 10000;
-  uint randomNumber2 = rand() % 10000;
-  uint randomNumber3 = rand() % 10000;
+  srand((unsigned int)time(NULL));
+  unsigned int r1 = (unsigned int)rand() % 10000;
+  unsigned int r2 = (unsigned int)rand() % 10000;
+  unsigned int r3 = (unsigned int)rand() % 10000;
 
   const int randomRange = 100000;
-  uint randomOffset = randomNumber1 * randomRange * randomRange +
-                      randomNumber2 * randomRange + randomNumber3;
+  unsigned long long randomOffset = (unsigned long long)r1 * randomRange * randomRange
+                                  + (unsigned long long)r2 * randomRange + r3;
+  int finalRandomNumber = (int)(randomOffset % (unsigned long long)randomRange);
 
-  int finalRandomNumber = randomOffset % randomRange;
-
-  snprintf(fileName, maxFileNameLength, "%s/%s", tmpFolder, fileNameFormat);
-  snprintf(fileName2, maxFileNameLength, fileName, finalRandomNumber);
+  snprintf(fileName2, maxFileNameLength, "%s/ts_out.%d", tmpFolder, finalRandomNumber);
   printf("save to %s\n", fileName2);
   free(fileName);
   return fileName2;
@@ -253,7 +251,7 @@ void parse_opts(int argc, char **argv) {
       } else if (strcmp(longOptions[optionIdx].name, "full_cmd") == 0) {
         command_line.request = c_SHOW_CMD;
         if (optarg != NULL) {
-          command_line.jobid = -1; 
+          command_line.jobid = str2int64(optarg);
         } else {
           command_line.jobid = -1;
         }
@@ -539,12 +537,7 @@ void parse_opts(int argc, char **argv) {
       n_len += strnlen(command_line.command.array[i], 1024);
     }
     if (n_len > MAX_LEN) {
-      printf("too long command:");
-      for (size_t i = 0; i < command_line.command.num; i++)
-      {
-        printf("%s ", command_line.command.array[i]);
-      }
-      printf(" with %d chars, Max. %d", n_len, MAX_LEN);
+      error("too long command: %d chars, max %d", n_len, MAX_LEN);
     }
     
   }
@@ -622,7 +615,7 @@ static void print_help(const char *cmd) {
   printf("  TS_SQLITE_PATH   : SQLite DB path for logs (server start)\n");
   printf("  TS_FIRST_JOBID   : Initial job ID (server start, default: 1000)\n");
   printf("  TS_SORTJOBS      : Job queue sorting control (server start)\n");
-  printf("  TS_MAX_WALL_TIME : Max job wall-time in minutes, (server start, default: %d minutes)\n", DEFAULT_MAX_WALL_TIME);
+  printf("  TS_MAX_WALL_TIME : Max job wall-time in seconds (server start, default: %d)\n", DEFAULT_MAX_WALL_TIME);
   printf("  TMPDIR           : Temporary Output files directory\n");
 
   printf("\nLong option actions:\n");

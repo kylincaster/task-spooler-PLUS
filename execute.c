@@ -114,14 +114,10 @@ static void run_relink(int pid, struct Result *result) {
 
   if (WIFEXITED(status)) {
     /* We force the proper cast */
-    signed char tmp;
-    tmp = WEXITSTATUS(status);
-    result->errorlevel = tmp;
+    result->errorlevel = WEXITSTATUS(status);
     result->died_by_signal = 0;
   } else if (WIFSIGNALED(status)) {
-    signed char tmp;
-    tmp = WTERMSIG(status);
-    result->signal = tmp;
+    result->signal = WTERMSIG(status);
     result->errorlevel = -1;
     result->died_by_signal = 1;
   } else {
@@ -182,19 +178,15 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   // printf("runjob_ok %s\n", ofname);
   c_send_runjob_ok(ofname, pid);
 
-  wait(&status);
+  waitpid(pid, &status, 0);
 
   /* Set the errorlevel */
   if (WIFEXITED(status)) {
     /* We force the proper cast */
-    signed char tmp;
-    tmp = WEXITSTATUS(status);
-    result->errorlevel = tmp;
+    result->errorlevel = WEXITSTATUS(status);
     result->died_by_signal = 0;
   } else if (WIFSIGNALED(status)) {
-    signed char tmp;
-    tmp = WTERMSIG(status);
-    result->signal = tmp;
+    result->signal = WTERMSIG(status);
     result->errorlevel = -1;
     result->died_by_signal = 1;
   } else {

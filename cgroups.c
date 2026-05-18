@@ -92,7 +92,7 @@ static int cgroup_v1_limit_cpu(int jobid, pid_t pid, int cpus) {
 
     char path[512];
     long period = 100000;       // 100ms 调度周期
-    long quota = cpus * period; // 周期内可用 CPU 时间（微秒）
+    long quota = (long)cpus * period;
 
     /* 1. 创建 cgroup 目录 */
     if (cg_mkdir(buf) != 0) {

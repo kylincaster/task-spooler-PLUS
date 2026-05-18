@@ -708,13 +708,12 @@ void s_send_cmd(int s, int jobid) {
 static char *get_ofile_from_FD(int pid) {
     char path[256], buff[256] = "";
     snprintf(path, 255, "/proc/%d/fd/1", pid);
-    int len = readlink(path, buff, sizeof(buff));
-
-    // printf("path = %s, buff = %s\n", path, buff);
-    if (strlen(buff) == 0 || len == -1) {
+    ssize_t len = readlink(path, buff, sizeof(buff) - 1);
+    if (len == -1 || len == 0) {
         return NULL;
     }
-    int namesize = strnlen(buff, 255) + 1;
+    buff[len] = '\0';
+    int namesize = (int)len + 1;
     char *f = (char *)malloc(namesize);
     strncpy(f, buff, namesize);
     return f;
@@ -834,7 +833,13 @@ void s_list(int s, int ts_UID, enum ListFormat listFormat) {
         }
 
         size_t buffer_strlen = strlen(buffer);
-        buffer = realloc(buffer, buffer_strlen + 1 + 1);
+        char *newbuf = realloc(buffer, buffer_strlen + 2);
+        if (newbuf == NULL) {
+            free(buffer);
+            buffer = NULL;
+            goto end;
+        }
+        buffer = newbuf;
         strcat(buffer, "\n");
 
         send_list_line(s, buffer);
@@ -2589,7 +2594,9 @@ void s_get_logdir(int s) {
 }
 
 void s_set_logdir(char const *path) {
-    logdir = realloc(logdir, strlen(path) + 1);
+    char *newdir = realloc(logdir, strlen(path) + 1);
+    if (newdir == NULL) return;
+    logdir = newdir;
     strcpy(logdir, path);
 }
 

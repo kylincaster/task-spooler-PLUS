@@ -168,9 +168,9 @@ time_t get_max_wall_time() {
   if (str == NULL || strlen(str) == 0) {
     ;
   } else {
-    double max_walltime = str2int64(str);
+    int64_t max_walltime = str2int64(str);
     if (max_walltime > 0)
-        return max_walltime;
+        return (time_t)max_walltime;
   }
   return DEFAULT_MAX_WALL_TIME;
 }
