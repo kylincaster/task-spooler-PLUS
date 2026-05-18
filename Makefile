@@ -24,7 +24,8 @@ OBJECTS=main.o \
 	cJSON.o \
 	sqlite.o \
 	runtime_limit.o \
-	cgroups.o 
+	cgroups.o \
+	vec.o
 
 TARGET=ts
 INSTALL=install -c
@@ -60,6 +61,7 @@ list.o: list.c main.h
 tail.o: tail.c main.h
 cJSON.o: cjson/cJSON.c cjson/cJSON.h
 runtime_limit.o: runtime_limit.c main.h
+vec.o: vec.c vec.h
 cJSON.o : cjson/cJSON.c cjson/cJSON.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 

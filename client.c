@@ -378,7 +378,7 @@ void c_show_last_id() {
   }
 }
 
-void c_send_runjob_ok(const char *ofname, int pid) {
+void c_send_runjob_ok(const char *ofname, pid_t pid) {
   struct Msg m = default_msg();
 
   /* Prepare the message */
@@ -447,7 +447,7 @@ void c_clear_finished() {
   send_msg(server_socket, &m);
 }
 
-static char *get_output_file(int *pid) {
+static char *get_output_file(pid_t *pid) {
   struct Msg m = default_msg();
   int res;
   char *string = 0;
@@ -524,7 +524,7 @@ void c_cont_job(int jobid) {
 
 int c_tail() {
   char *str;
-  int pid;
+  pid_t pid;
   str = get_output_file(&pid);
   if (str == 0) {
     error("Error: the output is not stored. Cannot tail.\n");
@@ -537,7 +537,7 @@ int c_tail() {
 
 int c_cat() {
   char *str;
-  int pid;
+  pid_t pid;
   str = get_output_file(&pid);
   if (str == 0) {
     error("Error: the output is not stored. Cannot cat.\n");
@@ -549,7 +549,7 @@ int c_cat() {
 
 void c_show_output_file() {
   char *str;
-  int pid;
+  pid_t pid;
   /* This will exit if there is any error */
   str = get_output_file(&pid);
   if (str == 0) {
@@ -560,14 +560,14 @@ void c_show_output_file() {
 }
 
 void c_show_pid() {
-  int pid;
+  pid_t pid;
   /* This will exit if there is any error */
   get_output_file(&pid);
   printf("%i\n", pid);
 }
 
 void c_kill_job() {
-  int pid = 0;
+  pid_t pid = 0;
   /* This will exit if there is any error */
   get_output_file(&pid);
 
@@ -607,7 +607,7 @@ void c_kill_all_jobs() {
   switch (m.type) {
   case COUNT_RUNNING:
     for (int i = 0; i < m.u.count_running; ++i) {
-      int pid;
+      pid_t pid;
       res = recv(server_socket, &pid, sizeof(int), 0);
       if (res != sizeof(int))
         error("Error in receiving PID kill_all");
