@@ -557,7 +557,7 @@ static enum Break client_read(int index) {
       if (s_check_locker(ts_UID) == 1) { break; }
     }
 
-    if (ts_UID < 0 || ts_UID > USER_MAX) { 
+    if (ts_UID < 0 || ts_UID >= USER_MAX) {
       struct Msg m = default_msg();
       m.type = NEWJOB_PID_NOK;
       send_msg(s, &m);
@@ -636,6 +636,7 @@ static enum Break client_read(int index) {
     }
     close(s);
     remove_connection(index);
+    break;
   case GET_CMD:
     s_send_cmd(s, m.jobid);
     break;
