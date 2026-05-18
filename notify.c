@@ -11,6 +11,9 @@
 #include "main.h"
 #include "vec.h"
 
+struct Job *get_job(int jobid);
+void destroy_finished_job(struct Job *j);
+
 struct Notify {
   int socket;
   int jobid;

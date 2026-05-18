@@ -413,7 +413,6 @@ int read_jobid_DB(int **jobids, const char *table) {
   if (rc != SQLITE_OK) {
     fprintf(stderr, "[read_jobid_DB2] SQL error: %s from %s\n",
             sqlite3_errmsg(db), sql);
-    debug_write("test0");
     return -3; // 返回-1表示查询失败
   }
 

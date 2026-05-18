@@ -13,6 +13,20 @@ void error(const char *str, ...);
 
 int64_t i64abs(int64_t x) { return x < 0 ? -x : x; }
 
+/*
+void debug_write(const char *str) {
+  FILE *f = fopen(logfile_path, "a");
+  if (f == NULL) {
+    return;
+  }
+  char buf[100];
+  time_t now = time(0);
+  strftime(buf, 100, "%Y-%m-%d %H:%M:%S", localtime(&now));
+  fprintf(f, "%s @ %s\n", buf, str);
+  fclose(f);
+}
+*/
+
 char *charArray_string(int num, char **array) {
   int size;
   int i;

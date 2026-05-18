@@ -17,4 +17,6 @@ int *chars_to_ints(int *size, char *str, const char *delim);
 char *insert_chars_check(int pos, const char *input, const char *c);
 int64_t i64abs(int64_t x);
 
+// void debug_write(const char *str);
+
 #endif /* UTILS_H */
