@@ -258,6 +258,7 @@ struct Job {
   struct Procinfo info;
   int num_slots;
   int num_allocated;
+  int client_socket;  /* socket to send RUNJOB / NEWJOB_OK back to */
 };
 
 enum ExitCodes {
@@ -401,6 +402,7 @@ void s_job_info(int s, int jobid);
 void s_send_last_id(int s);
 
 void s_send_runjob(int s, int jobid);
+void s_send_newjob_ok(int socket, int jobid);
 
 void s_set_max_slots(int s, int new_max_slots);
 

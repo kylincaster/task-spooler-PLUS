@@ -56,8 +56,6 @@ static void s_newjob_ok(int index);
 
 static void s_newjob_nok(int index);
 
-static void s_runjob(int jobid, int index);
-
 static void clean_after_client_disappeared(int socket, int index);
 
 struct Client_conn {
@@ -296,20 +294,11 @@ void server_main(int notify_fd, char *_path) {
   server_loop(ls);
 }
 
-static int get_conn_of_jobid(int jobid) {
-  int i;
-  for (i = 0; i < nconnections; ++i)
-    if (client_cs[i].hasjob && client_cs[i].jobid == jobid)
-      return i;
-  return -1;
-}
-
 static void server_loop(int ls) {
   fd_set readset;
   int i;
   int maxfd;
   int keep_loop = 1;
-  int newjob;
 
   while (keep_loop) {
     FD_ZERO(&readset);
@@ -384,25 +373,7 @@ static void server_loop(int ls) {
       }
     } // nconnections
 
-    /* This will return firstjob->jobid or -1 */
-    newjob = next_run_job();
-    // printf("end of next_run, newjob = %d\n", newjob);
-
-    if (newjob != -1) {
-      int conn, awaken_job;
-      conn = get_conn_of_jobid(newjob);
-      /* This next marks the firstjob state to RUNNING */
-      s_mark_job_running(newjob);
-      s_runjob(newjob, conn);
-
-      while ((awaken_job = wake_hold_client()) != -1) {
-        int wake_conn = get_conn_of_jobid(awaken_job);
-        if (wake_conn == -1)
-          error("The job awaken does not have a connection open");
-        s_newjob_ok(wake_conn);
-      }
-      // printf("end of next_run_job for jobid[%d]\n", newjob);
-    } // job != -1
+    next_run_job();
     s_check_holdon();
   } // end of while (keep_loop)
 
@@ -785,16 +756,6 @@ static enum Break client_read(int index) {
   }
 
   return NOBREAK; /* normal */
-}
-
-static void s_runjob(int jobid, int index) {
-  int s;
-
-  if (!client_cs[index].hasjob)
-    error("Run job of the client %i which doesn't have any job", index);
-
-  s = client_cs[index].socket;
-  s_send_runjob(s, jobid);
 }
 
 static void s_newjob_ok(int index) {
