@@ -58,13 +58,6 @@ static void s_newjob_nok(int index);
 
 static void clean_after_client_disappeared(int socket, int index);
 
-struct Client_conn {
-  int socket;
-  int hasjob;
-  int jobid;
-  int ts_UID;
-};
-
 /* Globals */
 static struct Client_conn client_cs[MAXCONN];
 static int nconnections;

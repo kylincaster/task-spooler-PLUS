@@ -26,35 +26,6 @@ char *build_command_string() {
   return charArray_string(command_line.command.num, command_line.command.array);
 }
 
-char *charArray_string(int num, char** array) {
-  int size;
-  int i;
-  char *commandstring;
-
-  size = 0;
-
-  /* Count bytes needed */
-  for (i = 0; i < num; ++i) {
-    /* The '1' is for spaces, and at the last i,
-     * for the null character */
-    size = size + strlen(array[i]) + 1;
-  }
-
-  /* Alloc */
-  commandstring = (char *)malloc(size);
-  if (commandstring == NULL)
-    error("Error in malloc for commandstring");
-
-  /* Build the command */
-  strcpy(commandstring, array[0]);
-  for (i = 1; i < num; ++i) {
-    strcat(commandstring, " ");
-    strcat(commandstring, array[i]);
-  }
-
-  return commandstring;
-}
-
 void c_new_job() {
   // printf("new _job \n");
   struct Msg m = default_msg();

@@ -12,11 +12,6 @@
 #include "main.h"
 #include "default.inc"
 
-int64_t i64abs(int64_t x)
-{
-    return x < 0 ? -x : x;
-}
-
 void check_relink(int pid) {
   char buff[256];
   struct stat t_stat;

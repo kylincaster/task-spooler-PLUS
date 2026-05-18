@@ -42,57 +42,6 @@ int get_env(const char *env, int v0) {
 }
 
 //按空格自动分割子串的函数
-char **split_str(const char *str0, int *size) {
-  char **result = (char **)malloc(sizeof(char *)); //存储分割后的子串
-  char *str = (char *)malloc(sizeof(char) * (strlen(str0) + 1));
-  strcpy(str, str0);
-  int n = 0;                //数组的大小
-  char *token;              //分割得到的子串
-  token = strtok(str, " "); //以空格为分隔符分割字符串
-  while (token != NULL) {   //循环分割，直到遇到NULL
-    result = realloc(result,
-                     (n + 1) * sizeof(char *)); //重新分配内存空间，增加一个元素
-    if (result == NULL) { //如果内存分配失败，返回NULL
-      return NULL;
-    }
-    result[n] = token;         //将子串存入数组
-    n++;                       //更新数组的大小
-    token = strtok(NULL, " "); //继续分割
-  }
-  *size = n;     //返回数组的大小
-  return result; //返回数组
-}
-
-/*
-char* linux_cmd(char* CMD, char* out, int out_size) {
-  FILE *fp;
-  /- Open the command for reading. -/
-  fp = popen(CMD, "r");
-  if (fp == NULL) {
-    printf("Failed to run command: %s\n", CMD);
-    exit(EXIT_FAILURE);
-  }
-
-  /- Read the output a line at a time - output it. -/
-  while (fgets(out, out_size, fp) != NULL) {
-    ; // printf("%s", path);
-  }
-  char* end = memchr(out, '\n', out_size);
-  if (end != NULL) *end = '\0';
-  /- close -/
-  pclose(fp);
-  return out;
-}
-*/
-
-int64_t str2int64(const char *str) {
-  long long i;
-  if (sscanf(str, "%lld", &i) != 1) {
-    error("Error: in convert %s to int64_t\n", str);
-  }
-  return (int64_t)i;
-}
-
 const char *set_server_logfile() {
   logfile_path = getenv("TS_LOGFILE_PATH");
   if (logfile_path == NULL || strlen(logfile_path) == 0) {
@@ -245,35 +194,6 @@ const char *uid2user_name(int uid) {
   } else {
     return "Unknown";
   }
-}
-
-void s_user_status_all(int s) {
-  char buffer[256];
-  char *extra;
-  send_list_line(s, "-- Users ----------- \n");
-  for (int i = 0; i < user_number; i++) {
-    extra = user_locked[i] != 0 ? "Locked" : "";
-    if (user_max_slots[i] == 0 && user_busy[i] == 0)
-      continue;
-    snprintf(buffer, 256, "[%04d] %3d/%-4d Q:%-3d %16s Run. %2d %s\n",
-             user_UID[i], user_busy[i], abs(user_max_slots[i]), user_queue[i],
-             user_name[i], user_jobs[i], extra);
-    send_list_line(s, buffer);
-  }
-  snprintf(buffer, 256, "Service at UID:%d\n", server_uid);
-  send_list_line(s, buffer);
-}
-
-// i = ts_UID;
-void s_user_status(int s, int i) {
-  char buffer[256];
-  char *extra = "";
-  if (user_locked[i] != 0)
-    extra = "Locked";
-  snprintf(buffer, 256, "[%04d] %3d/%-4d Q:%-3d %16s Run. %2d %s\n",
-           user_UID[i], user_busy[i], abs(user_max_slots[i]), user_queue[i],
-           user_name[i], user_jobs[i], extra);
-  send_list_line(s, buffer);
 }
 
 int get_tsUID(int uid) {
