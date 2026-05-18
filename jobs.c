@@ -996,6 +996,7 @@ int s_newjob(int s, struct Msg *m, int ts_UID) {
     }
     // save the ts_UID and record the number of waiting jobs
     p->ts_UID = ts_UID; // get_tsUID(m->uid);
+    p->client_socket = s;
     p->num_slots = m->u.newjob.num_slots;
     p->store_output = m->u.newjob.store_output;
     p->should_keep_finished = m->u.newjob.should_keep_finished;
@@ -1243,61 +1244,98 @@ void s_delete_job(int jobid) {
     s_mark_job_running(newjob);
     s_runjob(newjob, conn);
 */
-int next_run_job() {
-    size_t n = vec_size(&active_jobs);
-
-    if (n == 0) return -1;
-
-    /* RELINK jobs get priority */
-    for (size_t i = 0; i < n; i++) {
-        struct Job *p = (struct Job *)vec_get(&active_jobs, i);
-        if (p->state == RELINK) return p->jobid;
+static void wake_all_held_clients(void) {
+    int awaken_job;
+    while ((awaken_job = wake_hold_client()) != -1) {
+        struct Job *p = findjob(awaken_job);
+        if (p) s_send_newjob_ok(p->client_socket, awaken_job);
     }
+}
 
-    int const free_slots = max_slots - busy_slots;
-    if (free_slots <= 0) return -1;
+int next_run_job(void) {
+    static int last_uid = 0;
+    int dispatched = 0;
 
-    /* start from a random user for fairness */
-    int uid_start = rand() % user_number;
+    while (1) {
+        size_t n = vec_size(&active_jobs);
+        if (n == 0) break;
 
-    for (int i = 0; i < user_number; i++) {
-        int uid = (uid_start + i) % user_number;
-        if (user_queue[uid] == 0) continue;
+        /* RELINK jobs get priority — dispatch one, then re-check */
+        int got_relink = 0;
+        for (size_t i = 0; i < n; i++) {
+            struct Job *p = (struct Job *)vec_get(&active_jobs, i);
+            if (p->state == RELINK) {
+                s_mark_job_running(p->jobid);
+                s_send_runjob(p->client_socket, p->jobid);
+                got_relink = 1;
+                dispatched++;
+                break;
+            }
+        }
+        if (got_relink) {
+            wake_all_held_clients();
+            continue;
+        }
 
-        for (size_t j = 0; j < n; j++) {
-            struct Job *p = (struct Job *)vec_get(&active_jobs, j);
+        /* ---- Round-robin: one job per user per round (QUEUED or PAUSE-timeout) ---- */
+        int found = 0;
+        for (int i = 0; i < user_number; i++) {
+            int uid = (last_uid + i) % user_number;
+            if (user_queue[uid] == 0) continue;
 
-            if (p->state == QUEUED) {
-                if (p->depend_on_size) {
-                    int ready = 1;
-                    for (int k = 0; k < p->depend_on_size; k++) {
-                        struct Job *dep = get_job(p->depend_on[k]);
-                        if (dep != NULL &&
-                            (dep->state == QUEUED || dep->state == RUNNING)) {
-                            ready = 0;
-                            break;
+            int free_slots = max_slots - busy_slots;
+            if (free_slots <= 0) break;
+
+            for (size_t j = 0; j < n; j++) {
+                struct Job *p = (struct Job *)vec_get(&active_jobs, j);
+                if (p->ts_UID != uid) continue;
+
+                if (p->state == QUEUED) {
+                    if (p->depend_on_size) {
+                        int ready = 1;
+                        for (int k = 0; k < p->depend_on_size; k++) {
+                            struct Job *dep = get_job(p->depend_on[k]);
+                            if (dep != NULL &&
+                                (dep->state == QUEUED || dep->state == RUNNING)) {
+                                ready = 0;
+                                break;
+                            }
                         }
+                        if (!ready) continue;
                     }
-                    if (!ready) continue;
+
+                    if (free_slots < p->num_slots) continue;
+                    if (user_max_slots[uid] - user_busy[uid] < p->num_slots) continue;
+
+                    user_queue[uid]--;
+                    s_mark_job_running(p->jobid);
+                    s_send_runjob(p->client_socket, p->jobid);
+                    last_uid = (uid + 1) % user_number;
+                    found = 1;
+                    dispatched++;
+                    break;
                 }
 
-                if (p->ts_UID == uid && free_slots >= p->num_slots &&
-                    user_max_slots[uid] - user_busy[uid] >= p->num_slots) {
-                    user_queue[uid]--;
-                    return p->jobid;
-                }
-            } else if (p->state == PAUSE && p->wall_time < 0) {
-                time_t cpu_time = get_cpu_time_by_pid(p->pid);
-                if (i64abs(p->wall_time) > cpu_time) {
-                    if (p->ts_UID == uid && free_slots >= p->num_slots &&
-                        user_max_slots[uid] - user_busy[uid] >= p->num_slots) {
-                        config_running(p);
-                    }
+                if (p->state == PAUSE && p->wall_time < 0) {
+                    if (i64abs(p->wall_time) <= get_cpu_time_by_pid(p->pid)) continue;
+                    if (free_slots < p->num_slots) continue;
+                    if (user_max_slots[uid] - user_busy[uid] < p->num_slots) continue;
+
+                    config_running(p);
+                    s_send_runjob(p->client_socket, p->jobid);
+                    last_uid = (uid + 1) % user_number;
+                    found = 1;
+                    dispatched++;
+                    break;
                 }
             }
         }
+
+        if (!found) break;
+        wake_all_held_clients();
     }
-    return -1;
+
+    return dispatched;
 }
 
 /* Returns 1000 if no limit, The limit otherwise. */
@@ -1975,10 +2013,16 @@ static void add_to_notify_list(int s, int jobid) {
 
 static void send_waitjob_ok(int s, int errorlevel) {
     struct Msg m = default_msg();
-
     m.type = WAITJOB_OK;
     m.u.result.errorlevel = errorlevel;
     send_msg(s, &m);
+}
+
+void s_send_newjob_ok(int socket, int jobid) {
+    struct Msg m = default_msg();
+    m.type = NEWJOB_OK;
+    m.jobid = jobid;
+    send_msg(socket, &m);
 }
 
 static struct Job *get_job(int jobid) {
