@@ -1921,7 +1921,7 @@ int s_remove_job(int s, int *jobid, int client_tsUID) {
     p->state = FINISHED;
     p->result.errorlevel = -1;
     notify_errorlevel(p);
-    check_notify_list(m.jobid);
+    check_notify_list(*jobid);
 
     /* Remove from the appropriate vec */
     if (in_active)
@@ -1929,7 +1929,21 @@ int s_remove_job(int s, int *jobid, int client_tsUID) {
     else
         vec_remove(&finished_jobs, (size_t)remove_idx);
 
-    destroy_job(p);
+    /* PAUSE jobs were running — preserve them in the finished queue.
+       QUEUED/LOCKED jobs never ran, just free them. */
+    if (p->pid != 0) {
+        /* Finalize pause timing so work/pause duration display is correct */
+        if (p->info.pause_time != 0) {
+            p->info.pause_duration += get_monotonic_sec() - p->info.pause_time;
+            p->info.pause_time = 0;
+        }
+        pinfo_set_end_time(&p->info);
+        free_cores(p);
+        cgroups_clean_job(p);
+        new_finished_job(p);
+    } else {
+        destroy_job(p);
+    }
 
     m.type = REMOVEJOB_OK;
     send_msg(s, &m);
