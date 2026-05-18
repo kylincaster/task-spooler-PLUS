@@ -85,7 +85,7 @@ static int cg_mkdir(char const *path) {
 
 
 
-int cgroup_v1_limit_cpu(int jobid, int pid, int cpus) {
+static int cgroup_v1_limit_cpu(int jobid, pid_t pid, int cpus) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/cpu/" SPOOL_PATTERN, jobid, pid);
     printf("Create cgroups folder at %s\n", buf);
@@ -127,7 +127,7 @@ int cgroup_v1_limit_cpu(int jobid, int pid, int cpus) {
 }
 
 
-static int cgroup_v1_freeze(int jobid, int pid) {
+static int cgroup_v1_freeze(int jobid, pid_t pid) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
     printf("Create cgroups freezer folder at %s\n", buf);
@@ -154,7 +154,7 @@ static int cgroup_v1_freeze(int jobid, int pid) {
     return 0;
 }
 
-static int cgroup_v1_thaw(int jobid, int pid) {
+static int cgroup_v1_thaw(int jobid, pid_t pid) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
 
@@ -177,7 +177,7 @@ static int cgroup_v1_thaw(int jobid, int pid) {
 }
 
 /* return 0 for FREEZING and 1 for Frozen and -1 for error */
-static int cgroups_v1_check_frozen(int jobid, int pid) {
+static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
     char buf[256];
     char state[32];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
@@ -360,7 +360,7 @@ void cgroup_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) 
     struct dirent *ent;
     while ((ent = readdir(dir)) != NULL) {
         int jobid;
-        int pid;
+        pid_t pid;
 
         if (sscanf(ent->d_name, "TASK_SPOOLER_%d_%d", &jobid, &pid) != 2) {
             continue;
@@ -391,7 +391,7 @@ void cgroups_create_job(const struct Job *p) {
 // 任务结束
 void cgroups_clean_job(const struct Job *p) {
     int jobid = p->jobid;
-    int pid = p->pid;
+    pid_t pid = p->pid;
     if (pid == 0) {
         printf("cannot set cgroups for group: missing PID\n");
         return;

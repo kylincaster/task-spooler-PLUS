@@ -195,7 +195,7 @@ struct Msg {
     struct {
       int ofilename_size;
       int store_output;
-      int pid;
+      pid_t pid;
     } output;
     struct Result {
       int errorlevel;
@@ -236,7 +236,6 @@ struct Procinfo {
 };
 
 struct Job {
-  struct Job *next;
   int jobid;
   char *command;
   char *work_dir;
@@ -245,7 +244,7 @@ struct Job {
   struct Result result; /* Defined in msg.h */
   char *output_filename;
   int store_output;
-  int pid;
+  pid_t pid;
   int ts_UID;
   int64_t wall_time; /* wall-time limit */
   int should_keep_finished;
@@ -287,7 +286,7 @@ void c_clear_finished();
 
 int c_wait_server_commands();
 
-void c_send_runjob_ok(const char *ofname, int pid);
+void c_send_runjob_ok(const char *ofname, pid_t pid);
 
 int c_tail();
 
@@ -604,13 +603,15 @@ void s_unlock_server(int s, int uid);
 int s_check_locker(int uid);
 void s_set_jobids(int i);
 void s_sort_jobs();
-int s_check_relink(int s, int pid, int ts_UID);
+int s_check_relink(int s, pid_t pid, int ts_UID);
 void s_read_sqlite();
-int s_check_running_pid(int pid);
+int s_check_running_pid(pid_t pid);
 void init_pause();
 void s_check_holdon();
 void free_pause_array();
 struct Job *findjob(int jobid);
+void init_jobs(void);
+void destroy_jobs(void);
 void setup_ssmtp();
 
 /* client.c */

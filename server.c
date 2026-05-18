@@ -37,6 +37,7 @@
 
 #include "main.h"
 #include "user.h"
+#include "vec.h"
 
 #include "default.inc"
 
@@ -285,10 +286,9 @@ void server_main(int notify_fd, char *_path) {
     notify_parent(notify_fd);
 
   if (open_sqlite() != 0) {
-    // debug_write("Cannot open sqlite database");
     error("Cannot open sqlite database");
   }
-  // printf("jobids = %d\n", get_jobids_DB());
+  init_jobs();
   jobsort_flag = get_env("TS_SORTJOBS", 0);
   s_set_jobids(get_env("TS_FIRST_JOBID", get_jobids_DB()));
   s_read_sqlite();
@@ -412,6 +412,7 @@ static void server_loop(int ls) {
 static void end_server(int ls) {
   close(ls);
   unlink(path);
+  destroy_jobs();
   close_sqlite();
   /* This comes from the parent, in the fork after server_main.
    * This is the last use of path in this process.*/
