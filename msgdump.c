@@ -8,6 +8,7 @@
 #include <sys/time.h>
 
 #include "main.h"
+#include "msgdump.h"
 
 void msgdump(FILE *f, const struct Msg *m) {
   fprintf(f, "msgdump:\n");

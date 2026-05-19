@@ -5,11 +5,10 @@
     Please find the license in the provided COPYING file.
 */
 #include "utils.h"
+#include "error.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-void error(const char *str, ...);
 
 int64_t i64abs(int64_t x) { return x < 0 ? -x : x; }
 

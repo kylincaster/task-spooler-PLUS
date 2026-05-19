@@ -3,8 +3,11 @@
 #include <string.h>
 #include <time.h>
 
-#include "default.inc"
+#include "defaults.h"
 #include "main.h"
+#include "sqlite.h"
+#include "utils.h"
+#include "error.h"
 
 sqlite3 *db = NULL;
 char sql[1024*16] = "";

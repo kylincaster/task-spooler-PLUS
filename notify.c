@@ -10,9 +10,9 @@
 
 #include "main.h"
 #include "vec.h"
-
-struct Job *get_job(int jobid);
-void destroy_finished_job(struct Job *j);
+#include "notify.h"
+#include "jobs.h"
+#include "error.h"
 
 struct Notify {
   int socket;
@@ -21,11 +21,6 @@ struct Notify {
 };
 
 static struct Notify *first_notify = 0;
-
-/* from jobs.c */
-extern vec_t finished_jobs;
-extern int busy_slots;
-extern char buff[256];
 
 static void send_waitjob_ok(int s, int errorlevel) {
   struct Msg m = default_msg();

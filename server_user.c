@@ -14,24 +14,13 @@
 #include "main.h"
 #include "user.h"
 #include "vec.h"
-
-/* from jobs.c */
-extern vec_t active_jobs;
-extern int busy_slots;
-extern int max_slots;
-extern char buff[256];
-
-/* jobs.c internals made accessible */
-struct Job *get_job(int jobid);
-void free_cores(struct Job *p);
-int config_running(struct Job *p);
-void pause_job_config(struct Job *p);
-void rerun_job_config(struct Job *p);
-int safe_pause_job(struct Job *p);
-
-/* from user.c */
-extern int user_locker;
-extern time_t locker_time;
+#include "server_user.h"
+#include "jobs.h"
+#include "runtime_limit.h"
+#include "sqlite.h"
+#include "utils.h"
+#include "list.h"
+#include "cgroups.h"
 
 void s_user_status_all(int s) {
   char buffer[256];

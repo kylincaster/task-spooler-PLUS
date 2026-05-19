@@ -12,6 +12,9 @@
 #include <unistd.h>
 
 #include "main.h"
+#include "msg.h"
+#include "msgdump.h"
+#include "error.h"
 
 void send_bytes(const int fd, const char *data, int bytes) {
     int res;

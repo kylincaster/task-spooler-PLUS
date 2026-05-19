@@ -9,6 +9,7 @@
 #include <stdlib.h> /* for NULL */
 #include <sys/time.h> /* for NULL */
 #include "main.h"
+#include "signals.h"
 
 /* Some externs refer to this variable */
 static sigset_t normal_sigmask;

@@ -17,6 +17,12 @@
 #include <unistd.h>
 
 #include "main.h"
+#include "server_start.h"
+#include "server.h"
+#include "error.h"
+#include "user.h"
+#include "runtime_limit.h"
+#include "sqlite.h"
 
 int server_socket;
 static char *socket_path;

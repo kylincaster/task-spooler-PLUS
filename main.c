@@ -15,11 +15,17 @@
 #include <time.h> // time()
 #include <unistd.h>
 
-#include "default.inc"
+#include "defaults.h"
 #include "main.h"
 #include "version.h"
-
 #include "user.h"
+#include "utils.h"
+#include "runtime_limit.h"
+#include "error.h"
+#include "server_start.h"
+#include "client.h"
+#include "server.h"
+#include "signals.h"
 
 int client_uid;
 const int MAX_LEN = 1024 * 10;

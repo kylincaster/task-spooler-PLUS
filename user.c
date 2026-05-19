@@ -9,14 +9,23 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "default.inc"
+#include "defaults.h"
 #include "main.h"
 #include "user.h"
 
 void send_list_line(int s, const char *str);
 void error(const char *str, ...);
 
+char user_name[USER_MAX][USER_NAME_WIDTH];
+int server_uid;
+int user_max_slots[USER_MAX];
+int user_UID[USER_MAX];
+int user_busy[USER_MAX];
+int user_jobs[USER_MAX];
+int user_queue[USER_MAX];
 int user_locked[USER_MAX] = {0};
+int user_number;
+char *logfile_path;
 
 const char *get_user_path() {
   char *str;

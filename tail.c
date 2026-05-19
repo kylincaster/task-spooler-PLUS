@@ -17,6 +17,9 @@
 #include <sys/time.h> /* Dep de main.h */
 
 #include "main.h"
+#include "tail.h"
+#include "error.h"
+#include "client.h"
 
 enum {
     BSIZE = 1024

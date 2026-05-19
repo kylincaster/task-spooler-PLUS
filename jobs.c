@@ -4,7 +4,6 @@
 
     Please find the license in the provided COPYING file.
 */
-#define _DEFAULT_SOURCE
 #include <assert.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,10 +18,21 @@
 
 #include "cjson/cJSON.h"
 
-#include "default.inc"
+#include "defaults.h"
 #include "main.h"
 #include "user.h"
 #include "vec.h"
+#include "jobs.h"
+#include "sqlite.h"
+#include "runtime_limit.h"
+#include "cgroups.h"
+#include "info.h"
+#include "list.h"
+#include "utils.h"
+#include "notify.h"
+#include "mail.h"
+#include "execute.h"
+#include "error.h"
 
 /* The list will access them */
 int busy_slots = 0;

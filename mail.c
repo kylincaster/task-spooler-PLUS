@@ -16,6 +16,10 @@
 #include <unistd.h>
 
 #include "main.h"
+#include "mail.h"
+#include "error.h"
+#include "signals.h"
+#include "print.h"
 
 /* Returns the write pipe */
 static int run_sendmail(const char *dest) {

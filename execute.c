@@ -23,10 +23,12 @@
 #include <fcntl.h>
 
 #include "main.h"
-
-/* from signals.c */
-extern int signals_child_pid; /* 0, not set. otherwise, set. */
-extern int client_uid;
+#include "execute.h"
+#include "signals.h"
+#include "mail.h"
+#include "error.h"
+#include "client.h"
+#include "runtime_limit.h"
 
 /*
 static int wait_for_pid(int pid)

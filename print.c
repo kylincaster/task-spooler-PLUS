@@ -5,6 +5,8 @@
     Please find the license in the provided COPYING file.
 */
 #include "main.h"
+#include "print.h"
+#include "error.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
