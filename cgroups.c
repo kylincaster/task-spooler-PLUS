@@ -1,4 +1,8 @@
 #include "main.h"
+#include "cgroups.h"
+#include "error.h"
+#include "list.h"
+#include "user.h"
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>

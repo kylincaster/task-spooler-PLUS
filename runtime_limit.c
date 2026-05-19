@@ -10,7 +10,10 @@
 #include <signal.h>
 
 #include "main.h"
-#include "default.inc"
+#include "defaults.h"
+#include "runtime_limit.h"
+#include "error.h"
+#include "utils.h"
 
 void check_relink(int pid) {
   char buff[256];

@@ -14,7 +14,13 @@
 #include <unistd.h>
 
 #include "main.h"
-extern int client_uid;
+#include "client.h"
+#include "server_start.h"
+#include "error.h"
+#include "utils.h"
+#include "env.h"
+#include "execute.h"
+#include "tail.h"
 
 static void c_end_of_job(const struct Result *res);
 

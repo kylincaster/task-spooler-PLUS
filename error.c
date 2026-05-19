@@ -17,6 +17,12 @@
 #include <sys/time.h>
 
 #include "main.h"
+#include "error.h"
+#include "server.h"
+#include "server_start.h"
+#include "sqlite.h"
+#include "notify.h"
+#include "msgdump.h"
 
 enum Etype
 {

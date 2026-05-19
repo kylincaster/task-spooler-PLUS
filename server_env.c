@@ -11,9 +11,9 @@
 #include <string.h>
 
 #include "main.h"
-
-/* from server.c */
-extern char *logdir;
+#include "server_env.h"
+#include "jobs.h"
+#include "error.h"
 
 void s_get_logdir(int s) {
   send_list_line(s, logdir);

@@ -7,7 +7,7 @@
 #ifndef MSG_H
 #define MSG_H
 
-#include "job.h"
+#include "jobs.h"
 
 enum { CMD_LEN = 500, PROTOCOL_VERSION = 730 };
 
@@ -110,5 +110,13 @@ struct Msg {
     } list;
   } u;
 };
+
+/* msg.c */
+void send_bytes(int fd, const char *data, int bytes);
+int recv_bytes(int fd, char *data, int bytes);
+void send_msg(int fd, const struct Msg *m);
+int recv_msg(int fd, struct Msg *m);
+void send_ints(int fd, const int *data, int num);
+int *recv_ints(int fd, int *num);
 
 #endif /* MSG_H */

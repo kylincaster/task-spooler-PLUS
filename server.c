@@ -39,12 +39,25 @@
 #include "user.h"
 #include "vec.h"
 
-#include "default.inc"
+#include "defaults.h"
+#include "server.h"
+#include "jobs.h"
+#include "error.h"
+#include "notify.h"
+#include "job_ops.h"
+#include "server_user.h"
+#include "server_env.h"
+#include "server_start.h"
+#include "sqlite.h"
+#include "cgroups.h"
+#include "signals.h"
+#include "runtime_limit.h"
+#include "info.h"
+#include "print.h"
 
 enum Break { BREAK, NOBREAK, CLOSE };
 
 char *logdir;
-extern int busy_slots;
 /* Prototypes */
 static void server_loop(int ls);
 
@@ -63,9 +76,6 @@ static struct Client_conn client_cs[MAXCONN];
 static int nconnections;
 static char *path;
 static int max_descriptors;
-
-/* in jobs.c */
-extern int max_jobs;
 
 static void s_send_version(int s) {
   struct Msg m = default_msg();

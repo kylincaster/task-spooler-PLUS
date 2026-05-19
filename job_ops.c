@@ -15,16 +15,15 @@
 #include "main.h"
 #include "user.h"
 #include "vec.h"
-
-/* from jobs.c */
-extern vec_t active_jobs;
-extern vec_t finished_jobs;
-extern int busy_slots;
-extern int max_slots;
-extern char buff[256];
-
-/* jobs.c internal helpers */
-struct Job *get_job(int jobid);
+#include "job_ops.h"
+#include "jobs.h"
+#include "list.h"
+#include "info.h"
+#include "print.h"
+#include "runtime_limit.h"
+#include "error.h"
+#include "server_user.h"
+#include "utils.h"
 
 static void send_state(int s, enum Jobstate state) {
   struct Msg m = default_msg();

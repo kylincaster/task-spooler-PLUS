@@ -13,6 +13,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include "main.h"
+#include "env.h"
+#include "error.h"
+#include "signals.h"
 
 static int fork_command(const char *command) {
     int pid;

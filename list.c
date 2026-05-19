@@ -12,10 +12,11 @@
 
 #include "main.h"
 #include "user.h"
-
-/* From jobs.c */
-extern int busy_slots;
-extern int max_slots;
+#include "list.h"
+#include "jobs.h"
+#include "runtime_limit.h"
+#include "cgroups.h"
+#include "error.h"
 
 /* return 0 for running and 1 for sleep and -1 for error */
 int is_sleep(const struct Job* p) {

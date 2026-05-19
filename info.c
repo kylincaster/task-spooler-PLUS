@@ -11,6 +11,9 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include "main.h"
+#include "info.h"
+#include "error.h"
+#include "runtime_limit.h"
 
 void pinfo_init(struct Procinfo *p)
 {
