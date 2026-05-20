@@ -351,38 +351,51 @@ int s_check_running_pid(pid_t pid) {
 
 // if any error return non-0;
 int s_check_relink(int s, int jobid, pid_t pid, int ts_UID) {
-    struct Job *p = get_job(jobid);
-    if (p == NULL) {
-        p = job_by_pid(pid);
+    struct Job *p  = job_by_pid(pid);     // 按 PID 查，看这个进程是否已在 job 中
+    struct Job *p2 = get_job(jobid);      // 按 jobid 查，看 jobid 是否已被占用
+
+    // 情况1：jobid 已被占用
+    if (p2 != NULL) {
+        // 如果按 pid 查到的和按 jobid 查到的是同一个，说明是同一个 job，允许
+        if (p != p2) {
+            // jobid 被另一个不同的 job 占用了，报错
+            sprintf(buff, "  Error: Duplicate Jobid [%d] already exists with state [%s], cannot reuse with pid: %i\n",
+                    jobid, jstate2string(p2->state), pid);
+            send_list_line(s, buff);
+            return -1;
+        }
+        // p == p2，是同一个 job，走到下面按状态判断
     }
 
+    // 情况2：PID 已存在于某个 job 中
     if (p != NULL) {
-        if (p->state == FINISHED) {
-            sprintf(buff, "  Error: Duplicate Jobid [%d] is already finished\n", jobid);
-            send_list_line(s, buff);
-            return -1;
-        }
-        if (pid != p->pid && jobid == p->jobid) {
-            sprintf(buff, "  Error: Duplicate Jobid [%d@%s] but the pid is different %i vs %i\n",
-               p->jobid, jstate2string(p->state), pid, p->pid);
-            send_list_line(s, buff);
-            return -1;
-        }
-        if (pid == p->pid && jobid != p->jobid) {
-            if (p->state != DELINK && p->state != WAIT) {
-                sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
+        // 此时 p 就是 p2（或者 p2 为 NULL 但 p 存在，即 pid 冲突但 jobid 不冲突）
+        if (p2 == NULL) {
+            // pid 已被另一个 jobid 占用
+            sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
                     pid, p->jobid, jstate2string(p->state));
-                send_list_line(s, buff);
+            send_list_line(s, buff);
             return -1;
-            } else {
-                sprintf(buff, "  Warning: the jobid is reset from origin %d to %d\n",
-                    p->jobid, jobid);
-                send_list_line(s, buff);
-            }
-            check_timeout(p);
         }
-    }
 
+        // p == p2，同一个 job，检查状态是否允许操作
+        if (p->state == FINISHED) {
+            sprintf(buff, "  Error: Jobid [%d] is FINISHED, cannot reuse with pid: %i\n",
+                    jobid, pid);
+            send_list_line(s, buff);
+            return -1;
+        }
+
+        if (p->state != DELINK && p->state != WAIT) {
+            sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
+                    pid, p->jobid, jstate2string(p->state));
+            send_list_line(s, buff);
+            return -1;
+        }
+
+        check_timeout(p);
+    }  
+    
     char filename[256];
     struct stat t_stat;
 
