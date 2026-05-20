@@ -122,7 +122,8 @@ void s_get_max_slots(int s);
 void s_kill_all_jobs(int s, int ts_UID);
 void s_count_running_jobs(int s, int ts_UID);
 void s_check_holdon(void);
-int s_check_relink(int s, pid_t pid, int ts_UID);
+
+int s_check_relink(int s, int jobid, pid_t pid, int ts_UID);
 int s_check_running_pid(pid_t pid);
 void s_read_sqlite(void);
 int s_update_slots_usage(void);

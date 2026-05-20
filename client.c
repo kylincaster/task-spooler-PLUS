@@ -122,7 +122,7 @@ int c_wait_newjob_ok() {
   if (res == -1)
     error("Error in wait_newjob_ok");
   if (m.type == NEWJOB_NOK) {
-    fprintf(stderr, "Error: queue full or conflict jobid\n");
+    fprintf(stderr, "Error: maybe conflict jobid\n");
     exit(EXITCODE_QUEUE_FULL);
   }
 
@@ -132,7 +132,7 @@ int c_wait_newjob_ok() {
   }
 
   if (m.type == NEWJOB_PID_NOK) {
-    fprintf(stderr, "Error: queue full\n");
+    fprintf(stderr, "Error: cannot create job\n");
     exit(EXITCODE_RELINK_FAILED);
   }
   if (m.type != NEWJOB_OK)
