@@ -351,8 +351,9 @@ int s_check_running_pid(pid_t pid) {
 // if any error return non-0;
 int s_check_relink(int s, pid_t pid, int ts_UID) {
     struct Job *p = job_by_pid(pid);
+
     if (p != NULL && (p->state != DELINK && p->state != WAIT)) {
-        sprintf(buff, "  Error: PID [%i] is already in job as Jobid: %i [%s]\n",
+        sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
                 pid, p->jobid, jstate2string(p->state));
         send_list_line(s, buff);
         return -1;
@@ -384,7 +385,9 @@ int s_check_relink(int s, pid_t pid, int ts_UID) {
     }
 
     // printf("is delink %d, %d\n", p->jobid, p->state == DELINK);
-    check_timeout(p);
+    if (p != NULL) {
+        check_timeout(p);
+    }
     return job_tsUID;
 }
 
