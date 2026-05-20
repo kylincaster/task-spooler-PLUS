@@ -30,6 +30,10 @@
 #include "client.h"
 #include "runtime_limit.h"
 
+
+
+int cgroups_v1_freezer_ok(int jobid, pid_t pid);
+
 /*
 static int wait_for_pid(int pid)
 {
@@ -155,7 +159,6 @@ static void run_parent(int fd_read_filename, int pid, struct Result *result) {
   char *command;
   time_t starttv; //, endtv;
   struct tms cpu_times;
-
   /* Read the filename */
   /* This is linked with the write() in this same file, in run_child() */
   if (command_line.store_output) {
@@ -361,18 +364,22 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
   /* We create a new session, so we can kill process groups as:
        kill -- -`ts -p` */
   setsid();
+
+  pid_t pid = getpid();
+  while(cgroups_v1_freezer_ok(jobid, pid) != 1) {
+    usleep(30000);
+  }
   // only execute the command without the relink flag
   execvp(command_line.command.array[0], command_line.command.array);
 }
 
 int run_job(int jobid, struct Result *res) {
-  int pid;
+  pid_t pid;
   int errorlevel = 0;
   int p[2];
   char path[2048];
   getcwd(path, 2048);
   // const char *tmpdir = get_logdir();
-  // printf("tmpdir: %s\n", tmpdir);
 
   /* For the parent */
   /*program_signal(); Still not needed*/
