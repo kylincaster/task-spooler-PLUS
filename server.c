@@ -555,7 +555,7 @@ static enum Break client_read(int index) {
   case NEWJOB:
     if (m.u.newjob.taskpid != 0) {
       // check if taskpid isnot in queue and from a valid user.
-      ts_UID = s_check_relink(s, m.u.newjob.taskpid, ts_UID);
+      ts_UID = s_check_relink(s, m.jobid, m.u.newjob.taskpid, ts_UID);
     } else {
       if (s_check_locker(ts_UID) == 1) { break; }
     }

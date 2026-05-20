@@ -159,7 +159,7 @@ int open_sqlite() {
       "NULL, "
       "pause_time INT NOT NULL, pause_duration INT NOT NULL, end_time_ms "
       "INT NOT NULL, "
-      "order_id INT NOT NULL, command_strip INT NOT NULL, work_dir TEXT    NOT "
+      "order_id INT NOT NULL, command_strip INT NOT NULL, work_dir TEXT NOT "
       "NULL);";
 
   rc = sqlite3_exec(db, sql2, 0, 0, &zErrMsg);
@@ -273,6 +273,15 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
   char *notify_errorlevel_to = ints_to_chars(job->notify_errorlevel_to_size,
                                              job->notify_errorlevel_to, ",");
 
+  char *esc_command = sqlite3_mprintf("%q", job->command);
+  char *esc_output = sqlite3_mprintf("%q", job->output_filename);
+  char *esc_depend = sqlite3_mprintf("%q", depend_on);
+  char *esc_notify = sqlite3_mprintf("%q", notify_errorlevel_to);
+  char *esc_label = sqlite3_mprintf("%q", label);
+  char *esc_email = sqlite3_mprintf("%q", email);
+  char *esc_ptr = sqlite3_mprintf("%q", info->ptr);
+  char *esc_work_dir = sqlite3_mprintf("%q", job->work_dir);
+
   sprintf(
       sql,
       "%s INTO %s (jobid, command, state, output_filename, store_output, pid, "
@@ -288,21 +297,31 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       "%d,%d,%d,%ld,%ld,%ld,%d,"
       "'%s',%d,%d,%ld,'%ld','%ld','%ld','%ld','%ld','%ld', "
       "%d, %d,'%s');",
-      action, table, job->jobid, job->command, job->state, job->output_filename,
+      action, table, job->jobid, esc_command, job->state, esc_output,
       job->store_output, job->pid, job->ts_UID, job->should_keep_finished,
-      depend_on, // job->depend_on,
-      job->depend_on_size, notify_errorlevel_to, job->notify_errorlevel_to_size,
-      job->dependency_errorlevel, label, email, job->num_slots,
+      esc_depend, // job->depend_on,
+      job->depend_on_size, esc_notify, job->notify_errorlevel_to_size,
+      job->dependency_errorlevel, esc_label, esc_email, job->num_slots,
       result->errorlevel, result->died_by_signal, result->signal,
       result->user_sec, result->system_sec, result->real_sec, result->skipped,
-      info->ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
+      esc_ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
       info->start_time, info->end_time,
       info->pause_time, info->pause_duration, (time_t)(0),
-      order_id, job->command_strip, job->work_dir);
+      order_id, job->command_strip, esc_work_dir);
   char *errmsg = NULL;
   int rs = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
   free(depend_on);
   free(notify_errorlevel_to);
+
+  sqlite3_free(esc_command);
+  sqlite3_free(esc_output);
+  sqlite3_free(esc_depend);
+  sqlite3_free(esc_notify);
+  sqlite3_free(esc_label);
+  sqlite3_free(esc_email);
+  sqlite3_free(esc_ptr);
+  sqlite3_free(esc_work_dir);
+
   if (rs != SQLITE_OK) {
     fprintf(stderr, "[insert_DB] SQL error: %s by %s\n", errmsg, sql);
     sqlite3_free(errmsg);

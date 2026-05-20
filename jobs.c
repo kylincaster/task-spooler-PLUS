@@ -348,15 +348,39 @@ int s_check_running_pid(pid_t pid) {
     return 0;
 }
 
-// if any error return non-0;
-int s_check_relink(int s, pid_t pid, int ts_UID) {
-    struct Job *p = job_by_pid(pid);
 
-    if (p != NULL && (p->state != DELINK && p->state != WAIT)) {
-        sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
-                pid, p->jobid, jstate2string(p->state));
-        send_list_line(s, buff);
-        return -1;
+// if any error return non-0;
+int s_check_relink(int s, int jobid, pid_t pid, int ts_UID) {
+    struct Job *p = get_job(jobid);
+    if (p == NULL) {
+        p = job_by_pid(pid);
+    }
+
+    if (p != NULL) {
+        if (p->state == FINISHED) {
+            sprintf(buff, "  Error: Duplicate Jobid [%d] is already finished\n", jobid);
+            send_list_line(s, buff);
+            return -1;
+        }
+        if (pid != p->pid && jobid == p->jobid) {
+            sprintf(buff, "  Error: Duplicate Jobid [%d@%s] but the pid is different %i vs %i\n",
+               p->jobid, jstate2string(p->state), pid, p->pid);
+            send_list_line(s, buff);
+            return -1;
+        }
+        if (pid == p->pid && jobid != p->jobid) {
+            if (p->state != DELINK && p->state != WAIT) {
+                sprintf(buff, "  Error: PID [%i] is already in jobs as Jobid: %i [%s]\n",
+                    pid, p->jobid, jstate2string(p->state));
+                send_list_line(s, buff);
+            return -1;
+            } else {
+                sprintf(buff, "  Warning: the jobid is reset from origin %d to %d\n",
+                    p->jobid, jobid);
+                send_list_line(s, buff);
+            }
+            check_timeout(p);
+        }
     }
 
     char filename[256];
@@ -384,10 +408,6 @@ int s_check_relink(int s, pid_t pid, int ts_UID) {
         return -1;
     }
 
-    // printf("is delink %d, %d\n", p->jobid, p->state == DELINK);
-    if (p != NULL) {
-        check_timeout(p);
-    }
     return job_tsUID;
 }
 
