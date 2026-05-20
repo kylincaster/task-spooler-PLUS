@@ -16,4 +16,5 @@ int cgroups_thaw_job(const struct Job *p);
 int cgroups_freeze_job(const struct Job *p);
 int cgroups_is_frozen(const struct Job *p);
 
+int cgroups_v1_freezer_ok(int jobid, pid_t pid);
 #endif /* CGROUPS_H */

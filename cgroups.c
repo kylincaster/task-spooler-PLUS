@@ -89,7 +89,7 @@ static int cg_mkdir(char const *path) {
 
 
 
-static int cgroup_v1_limit_cpu(int jobid, pid_t pid, int cpus) {
+static int cgroups_v1_cpu(int jobid, pid_t pid, int cpus) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/cpu/" SPOOL_PATTERN, jobid, pid);
     printf("Create cgroups folder at %s\n", buf);
@@ -131,7 +131,61 @@ static int cgroup_v1_limit_cpu(int jobid, pid_t pid, int cpus) {
 }
 
 
-static int cgroup_v1_freeze(int jobid, pid_t pid) {
+static int cgroups_v1_freeze(int jobid, pid_t pid) {
+    /*
+    char buf[256];
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
+    printf("Create cgroups freezer folder at %s\n", buf);
+
+    char path[512];
+
+    if (cg_mkdir(buf) != 0) {
+        return -1;
+    }
+
+    snprintf(path, sizeof(path), "%s/cgroup.procs", buf);
+    if (cg_write(path, "%d", pid) != 0) {
+        return -1;
+    }
+    */
+    char buf[256];
+
+    /* 3. 设置冻结状态（不等待是否真的冻上） */
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    if (cg_write(buf, "FROZEN") != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int cgroups_v1_thaw(int jobid, pid_t pid) {
+    /*
+    char buf[256];
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
+
+    char path[512];
+
+    struct stat st;
+    if (stat(buf, &st) != 0) {
+        printf("Freezer cgroup %s does not exist\n", buf);
+        return -1;
+    }
+
+    snprintf(path, sizeof(path), "%s/freezer.state", buf);
+    if (cg_write(path, "THAWED") != 0) {
+        return -1;
+    }
+    */
+    char buf[256];
+    /* 3. 设置冻结状态（不等待是否真的冻上） */
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    if (cg_write(buf, "THAWED") != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int cgroups_v1_mkdir_freezer(int jobid, pid_t pid) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
     printf("Create cgroups freezer folder at %s\n", buf);
@@ -148,36 +202,14 @@ static int cgroup_v1_freeze(int jobid, pid_t pid) {
     if (cg_write(path, "%d", pid) != 0) {
         return -1;
     }
-
-    /* 3. 设置冻结状态（不等待是否真的冻上） */
-    snprintf(path, sizeof(path), "%s/freezer.state", buf);
-    if (cg_write(path, "FROZEN") != 0) {
-        return -1;
-    }
-
+    cgroups_v1_thaw(jobid, pid);
     return 0;
 }
 
-static int cgroup_v1_thaw(int jobid, pid_t pid) {
+int cgroups_v1_freezer_ok(int jobid, pid_t pid) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
-
-    char path[512];
-
-    /* 检查目录是否存在 */
-    struct stat st;
-    if (stat(buf, &st) != 0) {
-        printf("Freezer cgroup %s does not exist\n", buf);
-        return -1;
-    }
-
-    /* 设置为解冻状态 */
-    snprintf(path, sizeof(path), "%s/freezer.state", buf);
-    if (cg_write(path, "THAWED") != 0) {
-        return -1;
-    }
-
-    return 0;
+    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    return access(buf, F_OK) == 0;
 }
 
 /* return 0 for FREEZING and 1 for Frozen and -1 for error */
@@ -188,6 +220,11 @@ static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
 
     char path[512];
     snprintf(path, sizeof(path), "%s/freezer.state", buf);
+
+    if (access(path, F_OK) != 0) {
+        // printf("%s does not exist\n", path);
+        return -1;
+    }
 
     FILE *fp = fopen(path, "r");
     if (!fp) {
@@ -224,17 +261,17 @@ int cgroups_freeze_job(const struct Job* p) {
         kill_pids(p->pid, SIGCONT, NULL);
         usleep(20000);
     }
-    return cgroup_v1_freeze(p->jobid, p->pid);
+    return cgroups_v1_freeze(p->jobid, p->pid);
 }
 
 int cgroups_thaw_job(const struct Job* p) {
-    int ret = cgroup_v1_thaw(p->jobid, p->pid);
+    int ret = cgroups_v1_thaw(p->jobid, p->pid);
     kill(p->pid, SIGCONT);
     kill_pids(p->pid, SIGCONT, NULL);
     return ret;
 }
 
-int cgroup_v1_cleanup_freezer(const char* group) {
+int cgroups_v1_cleanup_freezer(const char* group) {
     char buf[256];
     snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/%s", group);
 
@@ -280,7 +317,7 @@ int cgroup_v1_cleanup_freezer(const char* group) {
  * 清理 cgroup 目录
  */
 
-static int cgroup_v1_cleanup_cpu(const char *group) {
+static int cgroups_v1_cleanup_cpu(const char *group) {
     char path[512];
     char procs_path[512];
 
@@ -354,7 +391,7 @@ static int cgroup_v1_cleanup_cpu(const char *group) {
 // 定义清理函数类型
 typedef int (*cleanup_func_t)(const char *);
 
-void cgroup_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) {
+void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) {
     DIR *dir = opendir(spool_dir);
     if (!dir) {
         fprintf(stderr, "Error: cannot open dir %s: %s\n", spool_dir, strerror(errno));
@@ -379,8 +416,8 @@ void cgroup_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) 
 }
 
 void cgroups_clean_all_finished() {
-    cgroup_v1_clean_folder("/sys/fs/cgroup/cpu/", cgroup_v1_cleanup_cpu);
-    cgroup_v1_clean_folder("/sys/fs/cgroup/freezer/", cgroup_v1_cleanup_freezer);
+    cgroups_v1_clean_folder("/sys/fs/cgroup/cpu/", cgroups_v1_cleanup_cpu);
+    cgroups_v1_clean_folder("/sys/fs/cgroup/freezer/", cgroups_v1_cleanup_freezer);
 }
 
 // 调度器收到任务
@@ -389,7 +426,8 @@ void cgroups_create_job(const struct Job *p) {
         printf("cannot set cgroups for group: missing PID\n");
         return;
     }
-    cgroup_v1_limit_cpu(p->jobid, p->pid, p->num_allocated);
+    cgroups_v1_cpu(p->jobid, p->pid, p->num_allocated);
+    cgroups_v1_mkdir_freezer(p->jobid, p->pid);
 }
 
 // 任务结束
@@ -409,6 +447,6 @@ void cgroups_clean_job(const struct Job *p) {
     char group[64];
     snprintf(group, sizeof(group), SPOOL_PATTERN, p->jobid, p->pid);
     printf("clear cgroups: %s\n", group);
-    cgroup_v1_cleanup_cpu(group);
-    cgroup_v1_cleanup_freezer(group);
+    cgroups_v1_cleanup_cpu(group);
+    cgroups_v1_cleanup_freezer(group);
 }
