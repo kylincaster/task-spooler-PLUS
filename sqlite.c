@@ -306,7 +306,7 @@ static int edit_DB(struct Job *job, const char *table, const char *action) {
       result->user_sec, result->system_sec, result->real_sec, result->skipped,
       esc_ptr, info->nchars, info->allocchars, job->wall_time, info->enqueue_time,
       info->start_time, info->end_time,
-      info->pause_time, info->pause_duration, (time_t)(0),
+      info->pause_time, info->pause_duration, info->boot_time,
       order_id, job->command_strip, esc_work_dir);
   char *errmsg = NULL;
   int rs = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
@@ -536,7 +536,7 @@ struct Job *read_DB(int jobid, const char *table) {
 
     info->pause_time = sqlite3_column_int64(stmt, 30);
     info->pause_duration = sqlite3_column_int64(stmt, 31);
-    // info->end_time = sqlite3_column_int64(stmt, 32);
+    info->boot_time = sqlite3_column_int64(stmt, 32);
     job->command_strip = sqlite3_column_int(stmt, 34);
 
     strcpy(sql, (const char *)sqlite3_column_text(stmt, 35));

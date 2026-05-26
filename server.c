@@ -737,6 +737,13 @@ static enum Break client_read(int index) {
   case UNSET_ENV:
     s_unset_env(s, m.u.size);
     break;
+  case FIND_PID: {
+    struct Msg reply = default_msg();
+    reply.type = FIND_PID_RESULT;
+    reply.jobid = s_find_pid(m.u.find_pid.pid, m.u.find_pid.deep);
+    send_msg(s, &reply);
+    break;
+  }
   case GET_VERSION:
     s_send_version(s);
     break;

@@ -47,6 +47,7 @@ struct Procinfo {
   time_t end_time;
   time_t pause_time;
   time_t pause_duration;
+  time_t boot_time;
 };
 
 struct Job {
@@ -126,6 +127,7 @@ void s_check_holdon(void);
 int s_check_relink(int s, int jobid, pid_t pid, int ts_UID);
 int s_check_running_pid(pid_t pid);
 void s_read_sqlite(void);
+int s_find_pid(pid_t target_pid, int deep_search);
 int s_update_slots_usage(void);
 void send_list_line(int s, const char *str);
 void setup_ssmtp(void);

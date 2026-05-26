@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/time.h>
+#include <time.h>
 #include "main.h"
 #include "info.h"
 #include "error.h"
@@ -25,6 +26,7 @@ void pinfo_init(struct Procinfo *p)
     p->enqueue_time = 0;
     p->pause_time = 0;
     p->pause_duration = 0;
+    p->boot_time = 0;
 }
 
 void pinfo_free(struct Procinfo *p)
@@ -109,6 +111,9 @@ void pinfo_set_enqueue_time(struct Procinfo *p)
     p->enqueue_time = get_monotonic_sec();
     p->start_time = 0;
     p->end_time = 0;
+    if (p->boot_time == 0) {
+        p->boot_time = time(NULL) - get_monotonic_sec();
+    }
 }
 
 void pinfo_set_start_time_check(struct Procinfo *info) {

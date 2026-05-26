@@ -544,6 +544,28 @@ void c_show_pid() {
   printf("%i\n", pid);
 }
 
+int c_find_pid(pid_t pid, int deep_search) {
+  struct Msg m = default_msg();
+  int res;
+
+  m.type = FIND_PID;
+  m.u.find_pid.pid = pid;
+  m.u.find_pid.deep = deep_search;
+  send_msg(server_socket, &m);
+
+  res = recv_msg(server_socket, &m);
+  if (res != sizeof(m)) {
+    error("Error in c_find_pid");
+  }
+
+  if (m.type == FIND_PID_RESULT) {
+    return m.jobid;
+  }
+
+  error("Wrong message type in c_find_pid: %i", m.type);
+  return -1;
+}
+
 void c_kill_job() {
   pid_t pid = 0;
   /* This will exit if there is any error */

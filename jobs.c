@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -328,6 +329,74 @@ static struct Job *job_by_pid(pid_t pid) {
         if (p->pid == pid) return p;
     }
     return NULL;
+}
+
+/* Check if target_pid is a descendant (child, grandchild, etc.) of parent_pid.
+   Reads /proc/<pid>/children recursively. Returns 1 if yes, 0 if no. */
+static int is_descendant_pid(pid_t parent_pid, pid_t target_pid) {
+    char path[256];
+    char buf[4096];
+    int fd;
+    ssize_t n;
+
+    snprintf(path, sizeof(path), "/proc/%d/task/%d/children", parent_pid, parent_pid);
+    fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        return 0;
+    }
+
+    n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+
+    if (n <= 0) {
+        return 0;
+    }
+    buf[n] = '\0';
+
+    char *saveptr;
+    char *token = strtok_r(buf, " ", &saveptr);
+    while (token != NULL) {
+        pid_t child_pid = (pid_t)atoi(token);
+        if (child_pid == target_pid) {
+            return 1;
+        }
+        if (is_descendant_pid(child_pid, target_pid)) {
+            return 1;
+        }
+        token = strtok_r(NULL, " ", &saveptr);
+    }
+
+    return 0;
+}
+
+/* Find which running job a PID belongs to.
+   If deep_search != 0, also checks child/grandchild processes.
+   Returns jobid if found, -1 if not. */
+int s_find_pid(pid_t target_pid, int deep_search) {
+    if (target_pid <= 0) {
+        return -1;
+    }
+
+    size_t n = vec_size(&active_jobs);
+    for (size_t i = 0; i < n; i++) {
+        struct Job *p = (struct Job *)vec_get(&active_jobs, i);
+        if (p->state != RUNNING && p->state != PAUSE) {
+            continue;
+        }
+        if (p->pid <= 0) {
+            continue;
+        }
+
+        if (p->pid == target_pid) {
+            return p->jobid;
+        }
+
+        if (deep_search && is_descendant_pid(p->pid, target_pid)) {
+            return p->jobid;
+        }
+    }
+
+    return -1;
 }
 
 // return 1 for running, other is dead
