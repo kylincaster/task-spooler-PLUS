@@ -52,7 +52,8 @@ enum Request {
   c_SET_LOGDIR,
   c_GET_ENV,
   c_SET_ENV,
-  c_UNSET_ENV
+  c_UNSET_ENV,
+  c_FIND_PID
 };
 
 struct CommandLine {

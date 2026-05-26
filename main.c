@@ -187,6 +187,7 @@ static struct option longOptions[] = {
     {"check_daemon", no_argument, NULL, 0},
     {"no-bind", no_argument, NULL, 0},
     {"wtime", required_argument, NULL, 0},
+    {"find-by-pid", required_argument, NULL, 0},
     {NULL, 0, NULL, 0}};
 
 void parse_opts(int argc, char **argv) {
@@ -270,6 +271,12 @@ void parse_opts(int argc, char **argv) {
         }
       } else if (strcmp(longOptions[optionIdx].name, "stime") == 0) {
         command_line.start_time = str2int64(optarg);
+      } else if (strcmp(longOptions[optionIdx].name, "find-by-pid") == 0) {
+        command_line.request = c_FIND_PID;
+        command_line.taskpid = str2int64(optarg);
+        if (command_line.taskpid <= 0) {
+          error("Error: invalid PID '%s' for --find-by-pid.\n", optarg);
+        }
       } else if (strcmp(longOptions[optionIdx].name, "wtime") == 0) {
         if (parse_time(optarg, &command_line.wall_time) != 0) {
           error("Error: invalid duration '%s' for --wtime (examples, 30s, 3.4m, 1.5H, 2d).\n", optarg);
@@ -650,6 +657,7 @@ static void print_help(const char *cmd) {
   printf("  --unlock                        Release server lock\n");
   printf("  --relink [pid]                  Reconnect tasks after unexpected failures\n");
   printf("  --wtime [walltime]              Wall time limit, examples: 30s, 3.4m, 1.5H, 2d. (will be clamped to system maximum if exceeded).\n");
+  printf("  --find-by-pid [pid]             Find which running job a PID belongs to (incl. descendants), prints jobid or -1\n");
   printf("  --add_wtime [add_time]          Increase job wall time by ADD_time in minutes (root only)\n");
   printf("  --job [jobid] || -J [jobid]   specify the Job ID in relink, assignment or wall-time change\n");
   printf("  --daemon                        Run as daemon (root only)\n");
@@ -985,6 +993,11 @@ int main(int argc, char **argv) {
     if (!command_line.need_server)
       error("The command %i needs the server", command_line.request);
     c_unset_env();
+    break;
+  case c_FIND_PID:
+    if (!command_line.need_server)
+      error("The command %i needs the server", command_line.request);
+    printf("%i\n", c_find_pid(command_line.taskpid, 1 /* deep search */));
     break;
   }
 

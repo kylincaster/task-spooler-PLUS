@@ -58,5 +58,6 @@ void c_cont_job(int jobid);
 int c_lock_server(void);
 int c_unlock_server(void);
 void c_check_daemon(void);
+int c_find_pid(pid_t pid, int deep_search);
 
 #endif /* CLIENT_H */

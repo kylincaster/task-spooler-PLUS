@@ -257,7 +257,10 @@ void s_job_info(int s, int jobid) {
   if (p->email)
     fd_nprintf(s, 100, "Email: %s\n", p->email);
 
-  time_t g_boot_wallclock = time(NULL) - get_monotonic_sec();
+  time_t g_boot_wallclock = p->info.boot_time;
+  if (g_boot_wallclock == 0) {
+    g_boot_wallclock = time(NULL) - get_monotonic_sec();
+  }
   time_t ct = p->info.enqueue_time + g_boot_wallclock;
   fd_nprintf(s, 100, "Enqueue time: %s", ctime(&ct));
   ct = p->info.start_time + g_boot_wallclock;

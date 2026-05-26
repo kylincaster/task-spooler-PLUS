@@ -63,6 +63,8 @@ enum MsgTypes {
   SET_ENV,
   UNSET_ENV,
   ERROR_INFO,
+  FIND_PID,
+  FIND_PID_RESULT,
 };
 
 enum ListFormat { DEFAULT, JSON, TAB };
@@ -108,6 +110,10 @@ struct Msg {
       int term_width;
       enum ListFormat list_format;
     } list;
+    struct {
+      pid_t pid;
+      int deep;
+    } find_pid;
   } u;
 };
 
