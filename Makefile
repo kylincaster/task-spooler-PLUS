@@ -4,6 +4,9 @@ PREFIX_LOCAL=~
 GLIBCFLAGS=#-D_XOPEN_SOURCE=500 -D__STRICT_ANSI__
 CPPFLAGS+=$(GLIBCFLAGS) -D_DEFAULT_SOURCE
 CFLAGS?=-pedantic -ansi -Wall -g -std=gnu11 -fcommon -Wno-format-truncation # -DSOUND
+ifdef CGROUP_V2
+CFLAGS += -DCGROUP_V2
+endif
 OBJECTS=main.o \
 	server.o \
 	server_start.o \

@@ -14,27 +14,35 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// TODO: add the cgroups2 supporting
-// now only the cpus is limited
+/* ---- cgroups path constants ---- */
 
-#define SPOOL_PATTERN "TASK_SPOOLER_%d_%d"
+#define SPOOL_PATTERN           "TASK_SPOOLER_%d_%d"
 
-/**
- * 向 cgroup 文件写入字符串（自动处理打开/写入/关闭）
- *
- * @param path  文件路径
- * @param fmt   格式化字符串
- * @param ...   可变参数
- * @return      0 成功，-1 失败
- */
+#ifdef CGROUP_V2
+
+#define CGROUP_DIR              "/sys/fs/cgroup"
+#define CGROUP_CONTROLLERS      "/sys/fs/cgroup/cgroup.controllers"
+#define CGROUP_SUBTREE_CONTROL  "/sys/fs/cgroup/cgroup.subtree_control"
+#define CGROUP_PROCS            "cgroup.procs"
+#define CGROUP_CPU_MAX          "cpu.max"
+#define CGROUP_FREEZE           "cgroup.freeze"
+#define CGROUP_EVENTS           "cgroup.events"
+
+#else
+
+#define CGROUP_V1_CPU_DIR       "/sys/fs/cgroup/cpu"
+#define CGROUP_V1_FREEZER_DIR   "/sys/fs/cgroup/freezer"
+
+#endif /* CGROUP_V2 */
+
+/* ---- shared helpers ---- */
+
 static int cg_write(char const *path, char const *fmt, ...) {
     char buf[256];
     va_list ap;
 
     va_start(ap, fmt);
-
     int len = vsnprintf(buf, sizeof(buf), fmt, ap);
-
     va_end(ap);
 
     if (len < 0) {
@@ -43,32 +51,22 @@ static int cg_write(char const *path, char const *fmt, ...) {
     }
 
     int fd = open(path, O_WRONLY);
-
     if (fd < 0) {
         fprintf(stderr, "Error: open %s failed: %s\n", path, strerror(errno));
         return -1;
     }
 
     ssize_t ret = write(fd, buf, len);
-
     if (ret != len) {
         fprintf(stderr, "Error: write %s failed: %s\n", path, strerror(errno));
-
         close(fd);
         return -1;
     }
 
     close(fd);
-
     return 0;
 }
 
-/**
- * 创建目录（已存在不报错）
- *
- * @param path  目录路径
- * @return      0 成功，-1 失败
- */
 static int cg_mkdir(char const *path) {
     if (mkdir(path, 0755) != 0 && errno != EEXIST) {
         fprintf(stderr, "Error: failed to create %s: %s\n in cg_mkdir()", path,
@@ -78,40 +76,275 @@ static int cg_mkdir(char const *path) {
     return 0;
 }
 
-/**
- * 将进程加入 cgroup v2 并限制其可用 CPU 核数
- *
- * @param pid     进程 PID
- * @param jobid   任务 ID（用于创建 cgroup 目录名）
- * @param cpus    可用的 CPU 核数（支持小数，如 1.5 表示 1.5 个核）
- * @return        0 成功，-1 失败
- */
+static void cg_group_name(int jobid, pid_t pid, char *buf, size_t size) {
+    snprintf(buf, size, SPOOL_PATTERN, jobid, pid);
+}
 
+/* ================================================================
+ *  CGROUPS V2  implementation
+ * ================================================================ */
+#ifdef CGROUP_V2
 
+void cgroups_v2_init(void) {
+    /* Check if cpu controller is available */
+    FILE *fp = fopen(CGROUP_CONTROLLERS, "r");
+    if (!fp) {
+        fprintf(stderr, "Warning: cannot open %s\n", CGROUP_CONTROLLERS);
+        return;
+    }
+
+    char line[256];
+    int has_cpu = 0;
+    if (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, "cpu")) {
+            has_cpu = 1;
+        }
+    }
+    fclose(fp);
+
+    if (has_cpu) {
+        /* Try to enable cpu controller in subtree_control; may fail if
+           already enabled or if we lack permission — ignore the result. */
+        cg_write(CGROUP_SUBTREE_CONTROL, "+cpu");
+    }
+}
+
+static int cgroups_v2_cpu(int jobid, pid_t pid, int cpus) {
+    char path[512];
+    char group[64];
+
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s", group);
+    printf("Create cgroups v2 folder at %s\n", path);
+
+    long period = 100000;
+    long quota  = (long)cpus * period;
+
+    if (cg_mkdir(path) != 0) {
+        return -1;
+    }
+
+    /* CPU limit: cpu.max = "$MAX $PERIOD" */
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_CPU_MAX, group);
+    if (cg_write(path, "%ld %ld", quota, period) != 0) {
+        return -1;
+    }
+
+    /* Add process */
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_PROCS, group);
+    if (cg_write(path, "%d", pid) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int cgroups_v2_freeze(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_FREEZE, group);
+    return cg_write(path, "1");
+}
+
+static int cgroups_v2_thaw(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_FREEZE, group);
+    return cg_write(path, "0");
+}
+
+static int cgroups_v2_check_frozen(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_EVENTS, group);
+
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    char line[256];
+    int frozen = -1;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "frozen ", 7) == 0) {
+            frozen = atoi(line + 7);
+            break;
+        }
+    }
+    fclose(fp);
+    return frozen;
+}
+
+static int cgroups_v2_cleanup(const char *group) {
+    char path[512];
+    char procs_path[512];
+
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s", group);
+    snprintf(procs_path, sizeof(procs_path), "%s/" CGROUP_PROCS, path);
+
+    /* Thaw first */
+    {
+        char freeze_path[512];
+        snprintf(freeze_path, sizeof(freeze_path), "%s/" CGROUP_FREEZE, path);
+        FILE *fp = fopen(freeze_path, "w");
+        if (fp) {
+            fprintf(fp, "0");
+            fclose(fp);
+        }
+    }
+
+    /* Kill remaining processes */
+    for (int retry = 0; retry < 100; retry++) {
+        FILE *fp = fopen(procs_path, "r");
+        if (!fp) {
+            break;
+        }
+
+        char line[64];
+        while (fgets(line, sizeof(line), fp)) {
+            pid_t p = (pid_t)atoi(line);
+            if (p > 0) {
+                if (kill(p, SIGKILL) != 0 && errno != ESRCH) {
+                    fprintf(stderr, "Error: kill(%d) failed: %s\n", p,
+                            strerror(errno));
+                }
+            }
+        }
+        fclose(fp);
+
+        /* Check if empty */
+        fp = fopen(procs_path, "r");
+        if (!fp) break;
+        int empty = (fgets(line, sizeof(line), fp) == NULL);
+        fclose(fp);
+        if (empty) break;
+
+        usleep(10000);
+    }
+
+    /* Remove directory */
+    for (int i = 0; i < 100; i++) {
+        if (rmdir(path) == 0 || errno == ENOENT) {
+            return 0;
+        }
+        if (errno != EBUSY) {
+            fprintf(stderr, "Error: rmdir %s failed: %s\n", path, strerror(errno));
+            return -1;
+        }
+        usleep(50000);
+    }
+
+    fprintf(stderr, "Failed to remove cgroup %s after 100 retries\n", path);
+    return -1;
+}
+
+static void cgroups_v2_clean_dir(const char *spool_dir) {
+    DIR *dir = opendir(spool_dir);
+    if (!dir) {
+        fprintf(stderr, "Error: cannot open dir %s: %s\n", spool_dir, strerror(errno));
+        return;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        int jobid;
+        pid_t pid;
+        if (sscanf(ent->d_name, "TASK_SPOOLER_%d_%d", &jobid, &pid) != 2) {
+            continue;
+        }
+        if (s_check_running_pid(pid) == 0) {
+            printf("[CLEAN] dead task: %s/%s\n", spool_dir, ent->d_name);
+            cgroups_v2_cleanup(ent->d_name);
+        }
+    }
+    closedir(dir);
+}
+
+/* ---- public interface (v2) ---- */
+
+int cgroups_is_frozen(const struct Job *p) {
+    return cgroups_v2_check_frozen(p->jobid, p->pid) != -1;
+}
+
+int cgroups_freeze_job(const struct Job *p) {
+    if (is_sleep(p) == 0) {
+        kill(p->pid, SIGCONT);
+        kill_pids(p->pid, SIGCONT, NULL);
+        usleep(20000);
+    }
+    return cgroups_v2_freeze(p->jobid, p->pid);
+}
+
+int cgroups_thaw_job(const struct Job *p) {
+    int ret = cgroups_v2_thaw(p->jobid, p->pid);
+    kill(p->pid, SIGCONT);
+    kill_pids(p->pid, SIGCONT, NULL);
+    return ret;
+}
+
+void cgroups_create_job(const struct Job *p) {
+    if (p->pid == 0) {
+        printf("cannot set cgroups for group: missing PID\n");
+        return;
+    }
+    cgroups_v2_cpu(p->jobid, p->pid, p->num_allocated);
+}
+
+void cgroups_clean_job(const struct Job *p) {
+    int jobid = p->jobid;
+    pid_t pid = p->pid;
+    if (pid == 0) {
+        printf("cannot set cgroups for group: missing PID\n");
+        return;
+    }
+    if (s_check_running_pid(pid) == 1) {
+        printf("Cannot clear the cgroups for a RUNNING job[%d](PID: %d)\n",
+               jobid, pid);
+        return;
+    }
+
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    printf("clear cgroups v2: %s\n", group);
+    cgroups_v2_cleanup(group);
+}
+
+void cgroups_clean_all_finished(void) {
+    cgroups_v2_clean_dir(CGROUP_DIR);
+}
+
+int cgroups_freezer_ok(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s", group);
+    return access(path, F_OK) == 0;
+}
+
+#else /* !CGROUP_V2 — v1 implementation below */
+
+/* ================================================================
+ *  CGROUPS V1  implementation (existing, unchanged)
+ * ================================================================ */
 
 static int cgroups_v1_cpu(int jobid, pid_t pid, int cpus) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/cpu/" SPOOL_PATTERN, jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_CPU_DIR "/%s", group);
     printf("Create cgroups folder at %s\n", buf);
 
     char path[512];
-    long period = 100000;       // 100ms 调度周期
+    long period = 100000;
     long quota = (long)cpus * period;
 
-    /* 1. 创建 cgroup 目录 */
     if (cg_mkdir(buf) != 0) {
         return -1;
     }
 
-    /* 2. 启用 CPU 控制器 */
-    // snprintf(path, sizeof(path),
-    // "/sys/fs/cgroup/unified/cgroup.subtree_control"); cg_write(path, "+cpu");
-    // // 父级启用
-
-    // snprintf(path, sizeof(path), "%s/cgroup.subtree_control", buf);
-    // cg_write(path, "+cpu"); // 自身启用
-
-    /* 3. 设置 CPU 限制 */
     snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", buf);
     if (cg_write(path, "%ld", period) != 0) {
         return -1;
@@ -122,7 +355,6 @@ static int cgroups_v1_cpu(int jobid, pid_t pid, int cpus) {
         return -1;
     }
 
-    /* 4. 加入进程 */
     snprintf(path, sizeof(path), "%s/cgroup.procs", buf);
     if (cg_write(path, "%d", pid) != 0) {
         return -1;
@@ -130,28 +362,11 @@ static int cgroups_v1_cpu(int jobid, pid_t pid, int cpus) {
     return 0;
 }
 
-
 static int cgroups_v1_freeze(int jobid, pid_t pid) {
-    /*
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
-    printf("Create cgroups freezer folder at %s\n", buf);
-
-    char path[512];
-
-    if (cg_mkdir(buf) != 0) {
-        return -1;
-    }
-
-    snprintf(path, sizeof(path), "%s/cgroup.procs", buf);
-    if (cg_write(path, "%d", pid) != 0) {
-        return -1;
-    }
-    */
-    char buf[256];
-
-    /* 3. 设置冻结状态（不等待是否真的冻上） */
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
     if (cg_write(buf, "FROZEN") != 0) {
         return -1;
     }
@@ -159,26 +374,10 @@ static int cgroups_v1_freeze(int jobid, pid_t pid) {
 }
 
 static int cgroups_v1_thaw(int jobid, pid_t pid) {
-    /*
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
-
-    char path[512];
-
-    struct stat st;
-    if (stat(buf, &st) != 0) {
-        printf("Freezer cgroup %s does not exist\n", buf);
-        return -1;
-    }
-
-    snprintf(path, sizeof(path), "%s/freezer.state", buf);
-    if (cg_write(path, "THAWED") != 0) {
-        return -1;
-    }
-    */
-    char buf[256];
-    /* 3. 设置冻结状态（不等待是否真的冻上） */
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
     if (cg_write(buf, "THAWED") != 0) {
         return -1;
     }
@@ -187,17 +386,17 @@ static int cgroups_v1_thaw(int jobid, pid_t pid) {
 
 static int cgroups_v1_mkdir_freezer(int jobid, pid_t pid) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
     printf("Create cgroups freezer folder at %s\n", buf);
 
     char path[512];
 
-    /* 1. 创建 cgroup 目录 */
     if (cg_mkdir(buf) != 0) {
         return -1;
     }
 
-    /* 2. 加入进程（必须在 FREEZING 之前加入） */
     snprintf(path, sizeof(path), "%s/cgroup.procs", buf);
     if (cg_write(path, "%d", pid) != 0) {
         return -1;
@@ -208,21 +407,23 @@ static int cgroups_v1_mkdir_freezer(int jobid, pid_t pid) {
 
 int cgroups_v1_freezer_ok(int jobid, pid_t pid) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN "/freezer.state", jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
     return access(buf, F_OK) == 0;
 }
 
-/* return 0 for FREEZING and 1 for Frozen and -1 for error */
 static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
     char buf[256];
     char state[32];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/" SPOOL_PATTERN, jobid, pid);
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
 
     char path[512];
     snprintf(path, sizeof(path), "%s/freezer.state", buf);
 
     if (access(path, F_OK) != 0) {
-        // printf("%s does not exist\n", path);
         return -1;
     }
 
@@ -240,88 +441,55 @@ static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
 
     state[strcspn(state, "\n")] = '\0';
 
-    // printf("Freezer state: %s[%d], PID: %d\n", state, jobid, pid);
-
     if (strcmp(state, "FROZEN") == 0) {
-        return 1;  // 已冻结
+        return 1;
     } else if (strcmp(state, "FREEZING") == 0) {
-        return 0;  // 冻结中
+        return 0;
     } else {
-        return -1; // THAWED 或其他
+        return -1;
     }
 }
 
-int cgroups_is_frozen(const struct Job* p) {
-    return cgroups_v1_check_frozen(p->jobid, p->pid) != -1;
-}
-
-int cgroups_freeze_job(const struct Job* p) {
-    if (is_sleep(p) == 0) {
-        kill(p->pid, SIGCONT);
-        kill_pids(p->pid, SIGCONT, NULL);
-        usleep(20000);
-    }
-    return cgroups_v1_freeze(p->jobid, p->pid);
-}
-
-int cgroups_thaw_job(const struct Job* p) {
-    int ret = cgroups_v1_thaw(p->jobid, p->pid);
-    kill(p->pid, SIGCONT);
-    kill_pids(p->pid, SIGCONT, NULL);
-    return ret;
-}
-
-int cgroups_v1_cleanup_freezer(const char* group) {
+static int cgroups_v1_cleanup_freezer(const char *group) {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/fs/cgroup/freezer/%s", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
 
-    /* 先解冻，再删除 */
-    // 从 group 名解析出 freezer 路径并解冻
     char freezer_state[512];
     snprintf(freezer_state, sizeof(freezer_state), "%s/freezer.state", buf);
-    
+
     FILE *fp = fopen(freezer_state, "w");
     if (fp) {
         fprintf(fp, "THAWED");
         fclose(fp);
     }
 
-    /* 重试删除，最多 100 次 */
     for (int i = 0; i < 100; i++) {
         if (rmdir(buf) == 0) {
-            // printf("Removed cgroup %s\n", buf);
             return 0;
         }
-        
+
         if (errno == ENOENT) {
-            // 目录不存在，也算成功
-            // printf("Cgroup %s already removed\n", buf);
             return 0;
         }
-        
+
         if (errno == EBUSY) {
-            // 目录忙，等待 50ms 后重试
             usleep(50000);
             continue;
         }
-        
-        // 其他错误，直接返回
+
         fprintf(stderr, "Cannot remove cgroup %s: %s\n", buf, strerror(errno));
         return -1;
     }
-    
+
     fprintf(stderr, "Failed to remove cgroup %s after 100 retries\n", buf);
     return -1;
 }
-/**
- * 清理 cgroup 目录
- */
 
 static int cgroups_v1_cleanup_cpu(const char *group) {
     char path[512];
     char procs_path[512];
 
-    snprintf(path, sizeof(path), "/sys/fs/cgroup/cpu/%s", group);
+    snprintf(path, sizeof(path), CGROUP_V1_CPU_DIR "/%s", group);
 
     if (access(path, F_OK) != 0) {
         return 0;
@@ -329,7 +497,6 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
 
     snprintf(procs_path, sizeof(procs_path), "%s/cgroup.procs", path);
 
-    // 最多 retry 100 次
     for (int retry = 0; retry < 100; retry++) {
         FILE *fp = fopen(procs_path, "r");
 
@@ -348,9 +515,7 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
                 continue;
             }
 
-            // SIGKILL 整个进程
             if (kill(pid, SIGKILL) != 0) {
-                // ESRCH = 已不存在
                 if (errno != ESRCH) {
                     fprintf(stderr, "Error: kill(%d) failed: %s\n", pid,
                             strerror(errno));
@@ -360,7 +525,6 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
 
         fclose(fp);
 
-        // 再检查一次是否为空
         fp = fopen(procs_path, "r");
 
         if (!fp) {
@@ -375,11 +539,9 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
             break;
         }
 
-        // 给 kernel 时间清理 zombie / threads
         usleep(10000);
     }
 
-    // 最后删除 cgroup
     if (rmdir(path) != 0) {
         fprintf(stderr, "Error: rmdir %s failed: %s\n", path, strerror(errno));
         return -1;
@@ -388,16 +550,15 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
     return 0;
 }
 
-// 定义清理函数类型
 typedef int (*cleanup_func_t)(const char *);
 
-void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) {
+static void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) {
     DIR *dir = opendir(spool_dir);
     if (!dir) {
         fprintf(stderr, "Error: cannot open dir %s: %s\n", spool_dir, strerror(errno));
         return;
     }
-    
+
     struct dirent *ent;
     while ((ent = readdir(dir)) != NULL) {
         int jobid;
@@ -411,16 +572,32 @@ void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func)
             cleanup_func(ent->d_name);
         }
     }
-    
+
     closedir(dir);
 }
 
-void cgroups_clean_all_finished() {
-    cgroups_v1_clean_folder("/sys/fs/cgroup/cpu/", cgroups_v1_cleanup_cpu);
-    cgroups_v1_clean_folder("/sys/fs/cgroup/freezer/", cgroups_v1_cleanup_freezer);
+/* ---- public interface (v1) ---- */
+
+int cgroups_is_frozen(const struct Job *p) {
+    return cgroups_v1_check_frozen(p->jobid, p->pid) != -1;
 }
 
-// 调度器收到任务
+int cgroups_freeze_job(const struct Job *p) {
+    if (is_sleep(p) == 0) {
+        kill(p->pid, SIGCONT);
+        kill_pids(p->pid, SIGCONT, NULL);
+        usleep(20000);
+    }
+    return cgroups_v1_freeze(p->jobid, p->pid);
+}
+
+int cgroups_thaw_job(const struct Job *p) {
+    int ret = cgroups_v1_thaw(p->jobid, p->pid);
+    kill(p->pid, SIGCONT);
+    kill_pids(p->pid, SIGCONT, NULL);
+    return ret;
+}
+
 void cgroups_create_job(const struct Job *p) {
     if (p->pid == 0) {
         printf("cannot set cgroups for group: missing PID\n");
@@ -430,7 +607,6 @@ void cgroups_create_job(const struct Job *p) {
     cgroups_v1_mkdir_freezer(p->jobid, p->pid);
 }
 
-// 任务结束
 void cgroups_clean_job(const struct Job *p) {
     int jobid = p->jobid;
     pid_t pid = p->pid;
@@ -450,3 +626,14 @@ void cgroups_clean_job(const struct Job *p) {
     cgroups_v1_cleanup_cpu(group);
     cgroups_v1_cleanup_freezer(group);
 }
+
+void cgroups_clean_all_finished(void) {
+    cgroups_v1_clean_folder(CGROUP_V1_CPU_DIR, cgroups_v1_cleanup_cpu);
+    cgroups_v1_clean_folder(CGROUP_V1_FREEZER_DIR, cgroups_v1_cleanup_freezer);
+}
+
+int cgroups_freezer_ok(int jobid, pid_t pid) {
+    return cgroups_v1_freezer_ok(jobid, pid);
+}
+
+#endif /* CGROUP_V2 */

@@ -282,6 +282,9 @@ void server_main(int notify_fd, char *_path) {
 
   initialize_log_dir();
   cgroups_clean_all_finished();
+#ifdef CGROUP_V2
+  cgroups_v2_init();
+#endif
 
   if (notify_fd != 0)
     notify_parent(notify_fd);
