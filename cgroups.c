@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* ---- cgroups path constants ---- */
+/* ---- path constants ---- */
 
 #define SPOOL_PATTERN           "TASK_SPOOLER_%d_%d"
 
@@ -31,13 +31,13 @@
 #else
 
 #define CGROUP_V1_CPU_DIR       "/sys/fs/cgroup/cpu"
-#define CGROUP_V1_FREEZER_DIR   "/sys/fs/cgroup/freezer"
+#define CGROUP_V1_FREEZE_DIR    "/sys/fs/cgroup/freezer"
 
 #endif /* CGROUP_V2 */
 
 /* ---- shared helpers ---- */
 
-static int cg_write(char const *path, char const *fmt, ...) {
+static inline int cg_write(char const *path, char const *fmt, ...) {
     char buf[256];
     va_list ap;
 
@@ -67,7 +67,7 @@ static int cg_write(char const *path, char const *fmt, ...) {
     return 0;
 }
 
-static int cg_mkdir(char const *path) {
+static inline int cg_mkdir(char const *path) {
     if (mkdir(path, 0755) != 0 && errno != EEXIST) {
         fprintf(stderr, "Error: failed to create %s: %s\n in cg_mkdir()", path,
                 strerror(errno));
@@ -76,17 +76,18 @@ static int cg_mkdir(char const *path) {
     return 0;
 }
 
-static void cg_group_name(int jobid, pid_t pid, char *buf, size_t size) {
+static inline void cg_group_name(int jobid, pid_t pid, char *buf, size_t size) {
     snprintf(buf, size, SPOOL_PATTERN, jobid, pid);
 }
 
 /* ================================================================
- *  CGROUPS V2  implementation
+ *  Internal implementations — v1 or v2, selected at compile time
  * ================================================================ */
 #ifdef CGROUP_V2
 
+/* ---- v2 internal ---- */
+
 void cgroups_v2_init(void) {
-    /* Check if cpu controller is available */
     FILE *fp = fopen(CGROUP_CONTROLLERS, "r");
     if (!fp) {
         fprintf(stderr, "Warning: cannot open %s\n", CGROUP_CONTROLLERS);
@@ -103,8 +104,6 @@ void cgroups_v2_init(void) {
     fclose(fp);
 
     if (has_cpu) {
-        /* Try to enable cpu controller in subtree_control; may fail if
-           already enabled or if we lack permission — ignore the result. */
         cg_write(CGROUP_SUBTREE_CONTROL, "+cpu");
     }
 }
@@ -124,13 +123,11 @@ static int cgroups_v2_cpu(int jobid, pid_t pid, int cpus) {
         return -1;
     }
 
-    /* CPU limit: cpu.max = "$MAX $PERIOD" */
     snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_CPU_MAX, group);
     if (cg_write(path, "%ld %ld", quota, period) != 0) {
         return -1;
     }
 
-    /* Add process */
     snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_PROCS, group);
     if (cg_write(path, "%d", pid) != 0) {
         return -1;
@@ -139,8 +136,6 @@ static int cgroups_v2_cpu(int jobid, pid_t pid, int cpus) {
     return 0;
 }
 
-/* Wait for freeze to complete: poll cgroup.events until 'frozen 1' appears.
-   Returns 0 when frozen, -1 on timeout/error. */
 static int cgroups_v2_wait_frozen(int jobid, pid_t pid) {
     char path[512];
     char group[64];
@@ -164,14 +159,13 @@ static int cgroups_v2_wait_frozen(int jobid, pid_t pid) {
         if (found) {
             return 0;
         }
-        usleep(50000);  /* 50ms */
+        usleep(50000);
     }
     fprintf(stderr, "Timeout waiting for cgroup freeze on job %d, pid %d\n",
             jobid, pid);
     return -1;
 }
 
-/* Wait for thaw to complete: poll cgroup.events until 'frozen 0' appears. */
 static int cgroups_v2_wait_thawed(int jobid, pid_t pid) {
     char path[512];
     char group[64];
@@ -181,7 +175,7 @@ static int cgroups_v2_wait_thawed(int jobid, pid_t pid) {
     for (int i = 0; i < 200; i++) {
         FILE *fp = fopen(path, "r");
         if (!fp) {
-            return 0;  /* cgroup gone, definitely thawed */
+            return 0;
         }
         char line[256];
         int thawed = 0;
@@ -284,7 +278,6 @@ static int cgroups_v2_cleanup(const char *group) {
         }
         fclose(fp);
 
-        /* Check if empty */
         fp = fopen(procs_path, "r");
         if (!fp) break;
         int empty = (fgets(line, sizeof(line), fp) == NULL);
@@ -332,55 +325,7 @@ static void cgroups_v2_clean_dir(const char *spool_dir) {
     closedir(dir);
 }
 
-/* ---- public interface (v2) ---- */
-
-int cgroups_is_frozen(const struct Job *p) {
-    return cgroups_v2_check_frozen(p->jobid, p->pid) == 1;
-}
-
-int cgroups_freeze_job(const struct Job *p) {
-    return cgroups_v2_freeze(p->jobid, p->pid);
-}
-
-int cgroups_thaw_job(const struct Job *p) {
-    int ret = cgroups_v2_thaw(p->jobid, p->pid);
-    kill(p->pid, SIGCONT);
-    kill_pids(p->pid, SIGCONT, NULL);
-    return ret;
-}
-
-void cgroups_create_job(const struct Job *p) {
-    if (p->pid == 0) {
-        printf("cannot set cgroups for group: missing PID\n");
-        return;
-    }
-    cgroups_v2_cpu(p->jobid, p->pid, p->num_allocated);
-}
-
-void cgroups_clean_job(const struct Job *p) {
-    int jobid = p->jobid;
-    pid_t pid = p->pid;
-    if (pid == 0) {
-        printf("cannot set cgroups for group: missing PID\n");
-        return;
-    }
-    if (s_check_running_pid(pid) == 1) {
-        printf("Cannot clear the cgroups for a RUNNING job[%d](PID: %d)\n",
-               jobid, pid);
-        return;
-    }
-
-    char group[64];
-    cg_group_name(jobid, pid, group, sizeof(group));
-    printf("clear cgroups v2: %s\n", group);
-    cgroups_v2_cleanup(group);
-}
-
-void cgroups_clean_all_finished(void) {
-    cgroups_v2_clean_dir(CGROUP_DIR);
-}
-
-int cgroups_freezer_ok(int jobid, pid_t pid) {
+static int cgroups_v2_freeze_ok(int jobid, pid_t pid) {
     char path[512];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
@@ -403,11 +348,9 @@ int cgroups_freezer_ok(int jobid, pid_t pid) {
     return found;
 }
 
-#else /* !CGROUP_V2 — v1 implementation below */
+#else /* CGROUP_V1 */
 
-/* ================================================================
- *  CGROUPS V1  implementation (existing, unchanged)
- * ================================================================ */
+/* ---- v1 internal ---- */
 
 static int cgroups_v1_cpu(int jobid, pid_t pid, int cpus) {
     char buf[256];
@@ -445,7 +388,7 @@ static int cgroups_v1_freeze(int jobid, pid_t pid) {
     char buf[256];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s/freezer.state", group);
     if (cg_write(buf, "FROZEN") != 0) {
         return -1;
     }
@@ -456,19 +399,19 @@ static int cgroups_v1_thaw(int jobid, pid_t pid) {
     char buf[256];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s/freezer.state", group);
     if (cg_write(buf, "THAWED") != 0) {
         return -1;
     }
     return 0;
 }
 
-static int cgroups_v1_mkdir_freezer(int jobid, pid_t pid) {
+static int cgroups_v1_mkdir_freeze(int jobid, pid_t pid) {
     char buf[256];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
-    printf("Create cgroups freezer folder at %s\n", buf);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s", group);
+    printf("Create cgroups freeze folder at %s\n", buf);
 
     char path[512];
 
@@ -484,11 +427,11 @@ static int cgroups_v1_mkdir_freezer(int jobid, pid_t pid) {
     return 0;
 }
 
-int cgroups_v1_freezer_ok(int jobid, pid_t pid) {
+int cgroups_v1_freeze_ok(int jobid, pid_t pid) {
     char buf[256];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s/freezer.state", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s/freezer.state", group);
     return access(buf, F_OK) == 0;
 }
 
@@ -497,7 +440,7 @@ static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
     char state[32];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s", group);
 
     char path[512];
     snprintf(path, sizeof(path), "%s/freezer.state", buf);
@@ -529,14 +472,14 @@ static int cgroups_v1_check_frozen(int jobid, pid_t pid) {
     }
 }
 
-static int cgroups_v1_cleanup_freezer(const char *group) {
+static int cgroups_v1_cleanup_freeze(const char *group) {
     char buf[256];
-    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZER_DIR "/%s", group);
+    snprintf(buf, sizeof(buf), CGROUP_V1_FREEZE_DIR "/%s", group);
 
-    char freezer_state[512];
-    snprintf(freezer_state, sizeof(freezer_state), "%s/freezer.state", buf);
+    char freeze_state[512];
+    snprintf(freeze_state, sizeof(freeze_state), "%s/freezer.state", buf);
 
-    FILE *fp = fopen(freezer_state, "w");
+    FILE *fp = fopen(freeze_state, "w");
     if (fp) {
         fprintf(fp, "THAWED");
         fclose(fp);
@@ -631,7 +574,7 @@ static int cgroups_v1_cleanup_cpu(const char *group) {
 
 typedef int (*cleanup_func_t)(const char *);
 
-static void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanup_func) {
+static void cgroups_v1_clean_dir(const char *spool_dir, cleanup_func_t cleanup_func) {
     DIR *dir = opendir(spool_dir);
     if (!dir) {
         fprintf(stderr, "Error: cannot open dir %s: %s\n", spool_dir, strerror(errno));
@@ -655,23 +598,39 @@ static void cgroups_v1_clean_folder(const char *spool_dir, cleanup_func_t cleanu
     closedir(dir);
 }
 
-/* ---- public interface (v1) ---- */
+#endif /* CGROUP_V2 */
+
+/* ================================================================
+ *  Public interface — dispatches to v1 or v2 via #ifdef
+ * ================================================================ */
 
 int cgroups_is_frozen(const struct Job *p) {
+#ifdef CGROUP_V2
+    return cgroups_v2_check_frozen(p->jobid, p->pid) == 1;
+#else
     return cgroups_v1_check_frozen(p->jobid, p->pid) != -1;
+#endif
 }
 
 int cgroups_freeze_job(const struct Job *p) {
+#ifdef CGROUP_V2
+    return cgroups_v2_freeze(p->jobid, p->pid);
+#else
     if (is_sleep(p) == 0) {
         kill(p->pid, SIGCONT);
         kill_pids(p->pid, SIGCONT, NULL);
         usleep(20000);
     }
     return cgroups_v1_freeze(p->jobid, p->pid);
+#endif
 }
 
 int cgroups_thaw_job(const struct Job *p) {
+#ifdef CGROUP_V2
+    int ret = cgroups_v2_thaw(p->jobid, p->pid);
+#else
     int ret = cgroups_v1_thaw(p->jobid, p->pid);
+#endif
     kill(p->pid, SIGCONT);
     kill_pids(p->pid, SIGCONT, NULL);
     return ret;
@@ -682,8 +641,12 @@ void cgroups_create_job(const struct Job *p) {
         printf("cannot set cgroups for group: missing PID\n");
         return;
     }
+#ifdef CGROUP_V2
+    cgroups_v2_cpu(p->jobid, p->pid, p->num_allocated);
+#else
     cgroups_v1_cpu(p->jobid, p->pid, p->num_allocated);
-    cgroups_v1_mkdir_freezer(p->jobid, p->pid);
+    cgroups_v1_mkdir_freeze(p->jobid, p->pid);
+#endif
 }
 
 void cgroups_clean_job(const struct Job *p) {
@@ -700,19 +663,30 @@ void cgroups_clean_job(const struct Job *p) {
     }
 
     char group[64];
-    snprintf(group, sizeof(group), SPOOL_PATTERN, p->jobid, p->pid);
+    cg_group_name(jobid, pid, group, sizeof(group));
+#ifdef CGROUP_V2
+    printf("clear cgroups v2: %s\n", group);
+    cgroups_v2_cleanup(group);
+#else
     printf("clear cgroups: %s\n", group);
     cgroups_v1_cleanup_cpu(group);
-    cgroups_v1_cleanup_freezer(group);
+    cgroups_v1_cleanup_freeze(group);
+#endif
 }
 
 void cgroups_clean_all_finished(void) {
-    cgroups_v1_clean_folder(CGROUP_V1_CPU_DIR, cgroups_v1_cleanup_cpu);
-    cgroups_v1_clean_folder(CGROUP_V1_FREEZER_DIR, cgroups_v1_cleanup_freezer);
+#ifdef CGROUP_V2
+    cgroups_v2_clean_dir(CGROUP_DIR);
+#else
+    cgroups_v1_clean_dir(CGROUP_V1_CPU_DIR, cgroups_v1_cleanup_cpu);
+    cgroups_v1_clean_dir(CGROUP_V1_FREEZE_DIR, cgroups_v1_cleanup_freeze);
+#endif
 }
 
-int cgroups_freezer_ok(int jobid, pid_t pid) {
-    return cgroups_v1_freezer_ok(jobid, pid);
+int cgroups_freeze_ok(int jobid, pid_t pid) {
+#ifdef CGROUP_V2
+    return cgroups_v2_freeze_ok(jobid, pid);
+#else
+    return cgroups_v1_freeze_ok(jobid, pid);
+#endif
 }
-
-#endif /* CGROUP_V2 */
