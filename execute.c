@@ -32,7 +32,9 @@
 
 
 
-int cgroups_v1_freezer_ok(int jobid, pid_t pid);
+#ifndef CGROUP_V2
+int cgroups_freezer_ok(int jobid, pid_t pid);
+#endif
 
 /*
 static int wait_for_pid(int pid)
@@ -365,10 +367,12 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
        kill -- -`ts -p` */
   setsid();
 
+#ifndef CGROUP_V2
   pid_t pid = getpid();
-  while(cgroups_v1_freezer_ok(jobid, pid) != 1) {
+  while(cgroups_freezer_ok(jobid, pid) != 1) {
     usleep(30000);
   }
+#endif
   // only execute the command without the relink flag
   execvp(command_line.command.array[0], command_line.command.array);
 }
