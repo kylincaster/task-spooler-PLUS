@@ -32,7 +32,7 @@
 
 
 
-int cgroups_freezer_ok(int jobid, pid_t pid);
+int cgroups_freeze_ok(int jobid, pid_t pid);
 
 /*
 static int wait_for_pid(int pid)
@@ -366,7 +366,7 @@ static void run_child(int fd_send_filename, const char *tmpdir, int jobid) {
   setsid();
 
   pid_t pid = getpid();
-  while(cgroups_freezer_ok(jobid, pid) != 1) {
+  while(cgroups_freeze_ok(jobid, pid) != 1) {
     usleep(30000);
   }
   // only execute the command without the relink flag
