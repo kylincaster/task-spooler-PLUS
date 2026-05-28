@@ -139,12 +139,78 @@ static int cgroups_v2_cpu(int jobid, pid_t pid, int cpus) {
     return 0;
 }
 
+/* Wait for freeze to complete: poll cgroup.events until 'frozen 1' appears.
+   Returns 0 when frozen, -1 on timeout/error. */
+static int cgroups_v2_wait_frozen(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_EVENTS, group);
+
+    for (int i = 0; i < 200; i++) {
+        FILE *fp = fopen(path, "r");
+        if (!fp) {
+            return -1;
+        }
+        char line[256];
+        int found = 0;
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "frozen ", 7) == 0 && atoi(line + 7) == 1) {
+                found = 1;
+                break;
+            }
+        }
+        fclose(fp);
+        if (found) {
+            return 0;
+        }
+        usleep(50000);  /* 50ms */
+    }
+    fprintf(stderr, "Timeout waiting for cgroup freeze on job %d, pid %d\n",
+            jobid, pid);
+    return -1;
+}
+
+/* Wait for thaw to complete: poll cgroup.events until 'frozen 0' appears. */
+static int cgroups_v2_wait_thawed(int jobid, pid_t pid) {
+    char path[512];
+    char group[64];
+    cg_group_name(jobid, pid, group, sizeof(group));
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_EVENTS, group);
+
+    for (int i = 0; i < 200; i++) {
+        FILE *fp = fopen(path, "r");
+        if (!fp) {
+            return 0;  /* cgroup gone, definitely thawed */
+        }
+        char line[256];
+        int thawed = 0;
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "frozen ", 7) == 0 && atoi(line + 7) == 0) {
+                thawed = 1;
+                break;
+            }
+        }
+        fclose(fp);
+        if (thawed) {
+            return 0;
+        }
+        usleep(50000);
+    }
+    fprintf(stderr, "Timeout waiting for cgroup thaw on job %d, pid %d\n",
+            jobid, pid);
+    return -1;
+}
+
 static int cgroups_v2_freeze(int jobid, pid_t pid) {
     char path[512];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
     snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_FREEZE, group);
-    return cg_write(path, "1");
+    if (cg_write(path, "1") != 0) {
+        return -1;
+    }
+    return cgroups_v2_wait_frozen(jobid, pid);
 }
 
 static int cgroups_v2_thaw(int jobid, pid_t pid) {
@@ -152,7 +218,10 @@ static int cgroups_v2_thaw(int jobid, pid_t pid) {
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
     snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_FREEZE, group);
-    return cg_write(path, "0");
+    if (cg_write(path, "0") != 0) {
+        return -1;
+    }
+    return cgroups_v2_wait_thawed(jobid, pid);
 }
 
 static int cgroups_v2_check_frozen(int jobid, pid_t pid) {
@@ -266,15 +335,10 @@ static void cgroups_v2_clean_dir(const char *spool_dir) {
 /* ---- public interface (v2) ---- */
 
 int cgroups_is_frozen(const struct Job *p) {
-    return cgroups_v2_check_frozen(p->jobid, p->pid) != -1;
+    return cgroups_v2_check_frozen(p->jobid, p->pid) == 1;
 }
 
 int cgroups_freeze_job(const struct Job *p) {
-    if (is_sleep(p) == 0) {
-        kill(p->pid, SIGCONT);
-        kill_pids(p->pid, SIGCONT, NULL);
-        usleep(20000);
-    }
     return cgroups_v2_freeze(p->jobid, p->pid);
 }
 
