@@ -384,8 +384,23 @@ int cgroups_freezer_ok(int jobid, pid_t pid) {
     char path[512];
     char group[64];
     cg_group_name(jobid, pid, group, sizeof(group));
-    snprintf(path, sizeof(path), CGROUP_DIR "/%s", group);
-    return access(path, F_OK) == 0;
+    snprintf(path, sizeof(path), CGROUP_DIR "/%s/" CGROUP_PROCS, group);
+
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        return 0;
+    }
+
+    char line[64];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if ((pid_t)atoi(line) == pid) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    return found;
 }
 
 #else /* !CGROUP_V2 — v1 implementation below */
