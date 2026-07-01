@@ -1150,6 +1150,11 @@ void job_finished(const struct Result *result, int jobid) {
 
 static void s_add_job(struct Job *j) {
     if (j->state == RUNNING) {
+        /* If pause_time > 0, the job was paused before restart — restore as PAUSE */
+        if (j->info.pause_time > 0) {
+            j->state = PAUSE;
+            goto restore_pause;
+        }
         if (j->pid > 0 && s_check_running_pid(j->pid) == 1) {
             /* Keep RUNNING — original client will reconnect via RECONNECT */
             j->client_socket = 0;
@@ -1164,6 +1169,17 @@ static void s_add_job(struct Job *j) {
         printf("queue job %d (waiting for client reconnect)\n", j->jobid);
         j->client_socket = 0;
         if (j->user) j->user->queue++;
+        vec_push(&active_jobs, j);
+        jobids = jobids > j->jobid ? jobids : j->jobid + 1;
+        return;
+    } else if (j->state == PAUSE) {
+restore_pause:
+        /* Ensure pause_time is set — if missing, use current time */
+        if (j->info.pause_time == 0) {
+            j->info.pause_time = get_monotonic_sec();
+        }
+        printf("pause job %d (frozen cgroup, waiting for continue)\n", j->jobid);
+        j->client_socket = 0;
         vec_push(&active_jobs, j);
         jobids = jobids > j->jobid ? jobids : j->jobid + 1;
         return;
