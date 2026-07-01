@@ -669,7 +669,7 @@ static void print_help(const char *cmd) {
   printf("  --no-bind                   Disable CPU binding\n");
   printf("  --no-bind-defrag            Disable CPU defrag (server start)\n");
   printf("  --n-retry [N]               Max retries if job fails within 15 sec\n");
-  printf("  --add-wtime [time]          Increase job wall time (root only)\n");
+  printf("  --add-wtime [time]          Add/subtract job wall time (root only, negative OK)\n");
   printf("  --job, -J [id]              Specify job ID for command\n");
   printf("  --daemon                    Run as daemon (root only)\n");
   printf("  --only-daemon               Run as sole daemon, kill competing root instances (root only)\n");

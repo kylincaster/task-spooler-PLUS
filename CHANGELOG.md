@@ -2,6 +2,19 @@
 
 All notable changes to task-spooler-PLUS.
 
+## [v2.7.0] — 2026-Q3
+
+### Added
+- **Health check for RUNNING jobs** — `s_check_running_health()` runs every 10s in the server loop. Jobs RUNNING for ≥5 minutes are checked: if output log is empty AND no child processes, the job transitions to `ABNORMAL` state and its slots are freed. Health status is in-memory only (`health_state` field on `struct Job`: 0=UNCHECKED, 1=NORMAL, 2=ABNORMAL).
+- **`ABNORMAL` job state** — new `enum Jobstate` value for jobs found stuck by the health checker. State is visible in `ts -l` output. Slot quotas are released. Does not freeze cgroup — `ts -k` works as usual.
+- **`--add-wtime` negative values** — `parse_time()` no longer rejects negative durations. Use `--add-wtime -30m` to reduce a job's wall-time.
+
+### Fixed
+- **Dead job auto-cleanup** — `s_update_slots_usage()` now scans for dead PIDs (RUNNING/PAUSE/ABNORMAL) and moves them to finished via `job_finished()`. Triggers on every `ts -l` and job submission.
+- **PAUSE job restoration on restart** — `s_add_job()` detects RUNNING jobs with `pause_time > 0` in the DB and restores them as PAUSE. If the PID is dead, the job is cleaned up instead of restored as a zombie.
+- **`parse_time()` type safety** — output parameter changed from `time_t*` to `int64_t*` (matching `command_line.wall_time` type). Added ±1000-day boundary check.
+- **`s_add_wtime()` overflow protection** — explicit INT64_MAX check before addition prevents wall-time integer overflow.
+
 ## [v2.6.7] — 2026-Q2
 
 ### Changed

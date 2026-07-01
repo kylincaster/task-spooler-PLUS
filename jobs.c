@@ -571,7 +571,19 @@ void s_add_wtime(int s, int jobid, int64_t add_wtime) {
         return;
     }
 
-    int64_t new_wtime = i64abs(p->wall_time) + add_wtime;
+    int64_t abs_wtime = i64abs(p->wall_time);
+
+    /* Check for INT64 overflow */
+    if (add_wtime > 0 && abs_wtime > INT64_MAX - add_wtime) {
+        time_repr_t r = format_time(abs_wtime);
+        snprintf(buff, 255,
+                 "Error: [%d], wall-time overflow after adding %.3f%c\n",
+                 jobid, r.value, r.unit);
+        send_list_line(s, buff);
+        return;
+    }
+
+    int64_t new_wtime = abs_wtime + add_wtime;
     if (new_wtime <= 0) {
         time_repr_t old_r = format_time(i64abs(p->wall_time));
         time_repr_t new_r = format_time(i64abs(new_wtime));

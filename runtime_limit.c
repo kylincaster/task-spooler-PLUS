@@ -68,7 +68,7 @@ static double str2double(const char *str) {
 }
 */
 
-int parse_time(const char *s, time_t *out)
+int parse_time(const char *s, int64_t *out)
 {
     double total = 0.0;
 
@@ -133,7 +133,10 @@ int parse_time(const char *s, time_t *out)
         total += value * multiplier;
     }
 
-    *out = (time_t)(total + 0.5);
+    if (total > 86400000.0 || total < -86400000.0)
+        return -1;
+
+    *out = (int64_t)(total + 0.5);
 
     return 0;
 }
@@ -183,7 +186,7 @@ int parse_schedule(const char *s, time_t *out_mono) {
 
     if (*s == '+') {
         /* Relative: +5m, +1h30m */
-        time_t sec;
+        int64_t sec;
         if (parse_time(s + 1, &sec) != 0) return -1;
         *out_mono = get_monotonic_sec() + sec;
         return 0;

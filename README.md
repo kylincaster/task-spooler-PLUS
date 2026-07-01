@@ -51,7 +51,8 @@ Task Spooler PLUS began as a fork of [Task Spooler by Lluís Batlle i Rossell](h
 - **Multi-user support** with per-user slot limits
 - **Fatal crash recovery** via SQLite3 (WAL mode) — jobs, states, and timings survive reboots
 - **Cgroups CPU limiting** and **freezer-based pause/resume** (v1 and v2, compile-time selectable)
-- **Wall-time management** — auto-pause and re-queue timed-out tasks
+- **Wall-time management** — auto-pause and re-queue timed-out tasks; `--add-wtime` accepts negative values to reduce time
+- **Job health check** — automatically detects stuck RUNNING jobs (empty output + no child processes), transitions to `ABNORMAL` state and frees slots; runs every 10s
 - **Global user control** — suspend/resume all jobs for a single user
 - **Comprehensive output** in default, JSON, and tab-separated formats
 - **Simple build** — just `make` (no autotools)

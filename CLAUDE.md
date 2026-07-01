@@ -103,8 +103,12 @@ QUEUED → RUNNING → FINISHED
 LOCKED    PAUSE (freezer cgroup)
   ↓         ↓
 QUEUED    RUNNING (on resume/cont)
-
-Special states: HOLDING_CLIENT (queue full), RELINK (crash recovery), DELINK/WAIT (SQLite restored)
+              ↓
+         ABNORMAL (health check: stuck job, slots freed)
+              ↓
+         FINISHED (ts -k → SIGTERM → ENDJOB)
+              
+Special states: HOLDING_CLIENT (queue full), DELINK (client disconnected)
 ```
 
 ### User auth & slots
@@ -149,12 +153,16 @@ Key overrides: `TS_SOCKET`, `TS_SLOTS`, `TS_USER_PATH`, `TS_LOGFILE_PATH`, `TS_S
 
 ## Current branch work
 
-The `cpu-only` branch focuses on CPU binding and cgroups refinements:
+The `cpu-only` branch focuses on CPU binding and cgroups refinements, plus job health monitoring:
+
 - **Async CPU binding defrag** — `cpu_bind_defrag()` moved to a background pthread so the server `select()` loop stays responsive. The main thread sorts allocs and builds the jobs array (safe `findjob()`), then a detached thread does the cgroup I/O (freeze → rebuild → cpuset → thaw). During defrag, CPU bind allocation/free and pause/resume are gated; new jobs dispatch without binding.
 - **`cpu_bind_defrag_start()` / `cpu_bind_defrag_poll()`** — spawn and reap the defrag thread; retrigger flag defers freed allocs until the current defrag finishes.
 - **Synchronization** — `defrag_in_progress` flag (checked by server before touching CPU bind state) + `defrag_mutex` (held by defrag thread only). Server never blocks on the mutex.
 - **`gen_topology.py`** — multi-strategy output with `MAX_GROUPS_PER_NODE`, skips trivial/duplicate topologies
 - **`cpu_owner[]`** tracks real job IDs throughout allocation and defrag
+- **Job health check** — `s_check_running_health()` runs every 10s in the server loop. Detects stuck RUNNING jobs (output empty + no child processes, ≥5 min) and transitions to `ABNORMAL` state, freeing slots. Does not freeze cgroup — `ts -k` works normally.
+- **Dead PID cleanup** — `s_update_slots_usage()` auto-detects dead PIDs among RUNNING/PAUSE/ABNORMAL jobs and moves them to finished.
+- **PAUSE restore on restart** — `s_add_job()` restores paused jobs from DB (`pause_time > 0` → PAUSE), with PID liveness check to avoid zombies.
 
 ## Known Issues
 

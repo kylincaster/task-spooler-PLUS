@@ -55,7 +55,8 @@ Task Spooler PLUS 从 [Lluís Batlle i Rossell 的 Task Spooler](https://vicerve
 - **多用户**：每个用户独立配置最大槽位（CPU 核数）
 - **崩溃恢复**：SQLite3 WAL 模式，重启后所有任务状态完整恢复
 - **cgroups 集成**：CPU 配额限制 + freezer 暂停/恢复（v1/v2，编译时选）
-- **超时管理**：任务超时自动冻结并排到队尾
+- **超时管理**：任务超时自动冻结并排到队尾；`--add-wtime` 支持负值减少时间
+- **健康检查**：自动检测卡住的 RUNNING 任务（日志为空 + 无子进程），转为 ABNORMAL 状态并释放槽位；每 10 秒扫描一次
 - **用户级控制**：一键暂停/恢复某个用户的所有任务
 - **多格式输出**：默认、JSON、Tab 分隔三种格式
 - **构建简单**：`make` 一把梭，不用 autotools
