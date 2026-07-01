@@ -672,6 +672,7 @@ static void print_help(const char *cmd) {
   printf("  --add-wtime [time]          Add/subtract job wall time (root only, negative OK)\n");
   printf("  --job, -J [id]              Specify job ID for command\n");
   printf("  --daemon                    Run as daemon (root only)\n");
+  printf("  --start-service             Start server as system service (root only)\n");
   printf("  --only-daemon               Run as sole daemon, kill competing root instances (root only)\n");
 
   printf("\nActions:\n");
