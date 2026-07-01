@@ -328,6 +328,25 @@ void s_check_running_health(void) {
 int s_update_slots_usage() {
     int timeout_flag = s_check_timeout();
 
+    /* Clean up dead jobs: backwards scan so removals are safe */
+    {
+        size_t n = vec_size(&active_jobs);
+        for (size_t i = n; i > 0; i--) {
+            struct Job *p = (struct Job *)vec_get(&active_jobs, i - 1);
+            if ((p->state == RUNNING || p->state == PAUSE || p->state == ABNORMAL)
+                && p->pid > 0 && s_check_running_pid(p->pid) == 0) {
+                printf("dead job %d (pid=%d, state=%s) -> finished\n",
+                       p->jobid, p->pid, jstate2string(p->state));
+                struct Result r = default_result();
+                r.errorlevel = -1;
+                r.died_by_signal = 1;
+                r.signal = SIGKILL;
+                job_finished(&r, p->jobid);
+                check_notify_list(p->jobid);
+            }
+        }
+    }
+
     int slots_usage = 0;
     for (int i = 0; i < vec_size(&users_vec); i++)
         USER(i)->busy = USER(i)->jobs = USER(i)->queue = 0;
@@ -1152,8 +1171,17 @@ static void s_add_job(struct Job *j) {
     if (j->state == RUNNING) {
         /* If pause_time > 0, the job was paused before restart — restore as PAUSE */
         if (j->info.pause_time > 0) {
-            j->state = PAUSE;
-            goto restore_pause;
+            if (j->pid > 0 && s_check_running_pid(j->pid) == 1) {
+                j->state = PAUSE;
+                if (j->info.pause_time == 0)
+                    j->info.pause_time = get_monotonic_sec();
+                printf("pause job %d (frozen cgroup, waiting for continue)\n", j->jobid);
+                j->client_socket = 0;
+                vec_push(&active_jobs, j);
+                jobids = jobids > j->jobid ? jobids : j->jobid + 1;
+                return;
+            }
+            /* PID dead — don't restore zombie, fall through to cleanup below */
         }
         if (j->pid > 0 && s_check_running_pid(j->pid) == 1) {
             /* Keep RUNNING — original client will reconnect via RECONNECT */
@@ -1173,11 +1201,8 @@ static void s_add_job(struct Job *j) {
         jobids = jobids > j->jobid ? jobids : j->jobid + 1;
         return;
     } else if (j->state == PAUSE) {
-restore_pause:
-        /* Ensure pause_time is set — if missing, use current time */
-        if (j->info.pause_time == 0) {
+        if (j->info.pause_time == 0)
             j->info.pause_time = get_monotonic_sec();
-        }
         printf("pause job %d (frozen cgroup, waiting for continue)\n", j->jobid);
         j->client_socket = 0;
         vec_push(&active_jobs, j);
