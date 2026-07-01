@@ -341,6 +341,7 @@ int s_update_slots_usage() {
                 r.errorlevel = -1;
                 r.died_by_signal = 1;
                 r.signal = SIGKILL;
+                r.real_sec = get_work_time_by_job(p);
                 job_finished(&r, p->jobid);
                 check_notify_list(p->jobid);
             }
