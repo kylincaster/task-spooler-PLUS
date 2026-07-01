@@ -133,9 +133,6 @@ int parse_time(const char *s, time_t *out)
         total += value * multiplier;
     }
 
-    if (total < 0)
-        return -1;
-
     *out = (time_t)(total + 0.5);
 
     return 0;
