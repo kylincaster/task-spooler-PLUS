@@ -92,7 +92,7 @@ echo "--- 7. Hold & continue ---"
 ID7=$($TS -N 1 sleep 1 2>&1 | tail -1 | grep -oP '\d+')
 check "enqueue with -N" [ -n "$ID7" ]
 
-check "hold job"        $TS --hold "$ID7" > /dev/null 2>&1 || true
+check "hold job"        $TS --pause "$ID7" > /dev/null 2>&1 || true
 
 check "continue job"    $TS --cont "$ID7" > /dev/null 2>&1 || true
 

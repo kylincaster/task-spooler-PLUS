@@ -226,7 +226,7 @@ Copyright (C) 2007-2026  Kylin JIANG - Duc Nguyen - Lluis Batlle i Rossell
   --set-logdir [path]     配置日志目录
   --serialize || -M [fmt] 导出任务列表（default/json/tab）
                           用 -M json -J <id> 导出单个任务 JSON
-  --hold [jobid]          暂停指定任务
+  --pause [jobid]          暂停指定任务
   --cont [jobid]          恢复暂停的任务
   --suspend [USER]        暂停用户
   --resume [USER]         恢复用户

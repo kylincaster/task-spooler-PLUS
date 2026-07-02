@@ -217,7 +217,7 @@ Long option actions:
   --set-logdir [path]     Configure log directory
   --serialize || -M [fmt] Export job list (default/json/tab)
                           Use -M json -J <id> for single job JSON
-  --hold [jobid]          Pause specified job
+  --pause [jobid]          Pause specified job
   --cont [jobid]          Resume paused job
   --suspend [USER]        Suspend user
   --resume [USER]         Resume user

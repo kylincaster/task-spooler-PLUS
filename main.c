@@ -184,7 +184,7 @@ static struct option longOptions[] = {
     {"unsetenv", required_argument, NULL, 0},
     {"suspend", optional_argument, NULL, 0},
     {"resume", optional_argument, NULL, 0},
-    {"hold", required_argument, NULL, 0},
+    {"pause", required_argument, NULL, 0},
     {"cont", required_argument, NULL, 0},
     {"requeue", required_argument, NULL, 0},
     {"lock-ts", no_argument, NULL, 0},
@@ -248,7 +248,7 @@ void parse_opts(int argc, char **argv) {
           fprintf(stderr, "Error: invalid duration '%s' for --add-wtime (examples, 30s, 3.4m, 1.5H, 2d).\n", optarg);
           exit(EXIT_FAILURE);
         }
-      } else if (strcmp(longOptions[optionIdx].name, "hold") == 0) {
+      } else if (strcmp(longOptions[optionIdx].name, "pause") == 0) {
         command_line.request = c_HOLD_JOB;
         command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "cont") == 0) {
@@ -658,7 +658,7 @@ static void print_help(const char *cmd) {
   printf("  --serialize, -M [fmt]       Export job list (default/json/tab)\n");
   printf("                              Use -M json -J <id> for single job JSON\n");
   printf("  --tmp                       Store logs in tmp folder\n");
-  printf("  --hold [id]                 Pause specified job\n");
+  printf("  --pause [id]                Pause specified job\n");
   printf("  --cont [id]                 Resume paused job\n");
   printf("  --requeue [id]              Requeue a running/paused job (move to tail)\n");
   printf("  --suspend [user]            Pause tasks and lock account\n");
