@@ -2,6 +2,43 @@
 
 All notable changes to task-spooler-PLUS.
 
+## [v2.8.0] — 2026-Q3
+
+### Added
+- **Orphan QUEUED auto-cleanup** — `s_cleanup_orphan_queued()` scans `active_jobs`
+  for QUEUED jobs with `client_socket <= 0` (no client connected) and removes them
+  via `s_delete_job()`. Triggered once ~30 minutes after server start from
+  `server_loop()` using a `static` timer variable — no thread, no pipe, no extra
+  socket needed.
+- **`movebottom_DB()`** — new SQLite helper (sqlite.c) sets a job's `order_id` to
+  `max(order_id) + 1`, effectively moving it to the end of the queue. Used by
+  timeout and cleanup paths to keep DB order consistent with runtime order.
+- **Timeout order_id sync** — `s_check_timeout()` now calls `movebottom_DB()`
+  after moving a timed-out job to the back of `active_jobs`, so
+  `SELECT ... ORDER BY order_id` matches the runtime queue after restart.
+
+### Fixed
+- **`s_delete_job()` DB leak** — `s_delete_job()` (called from
+  `clean_after_client_disappeared()` and `remove_connection()`) now calls
+  `delete_DB(jobid, "Jobs")` before `destroy_job()`. Previously, QUEUED jobs
+  removed after RECONNECT + second disconnect were deleted from memory but not
+  from SQLite "Jobs" table, causing them to reappear on the next restart.
+- **`get_order_id()` always returns 0 for new jobs** — `get_order_id()` used
+  `sqlite3_exec` with a callback, which could not distinguish "no row found"
+  (new job not yet inserted) from "`order_id` is zero". This caused `edit_DB()`
+  to skip the `max_order_id + 1` fallback, assigning `order_id = 0` to all new
+  jobs. `ORDER BY order_id` then returned jobs in arbitrary order after restart.
+  Fixed by rewriting with `sqlite3_prepare_v2` / `sqlite3_step` so that the
+  absence of a row correctly sets an error code.
+- **`s_hold_job()` pause conversion for timeout-wait jobs** — when a job was in
+  "timeout wait" state (`wall_time < 0`, paused due to insufficient slots on
+  retry), `s_hold_job()` did not clear the negative wall_time, leaving the job
+  stuck. Now converts to a proper user pause by making `wall_time` positive and
+  syncing to DB.
+- **`s_cont_job()` DB wall_time sync** — when retry fails due to insufficient
+  slots, the negative wall_time is now also written to the DB via
+  `update_field_int64()`.
+
 ## [v2.7.0] — 2026-Q3
 
 ### Added
