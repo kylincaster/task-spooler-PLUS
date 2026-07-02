@@ -62,18 +62,26 @@ static int max_order_id(int* err) { return check_order_id("MAX", err); }
 static int min_order_id(int* err) { return check_order_id("MIN", err); }
 
 static int get_order_id(int jobid, int* err) {
-  char *err_msg = 0;
-  int value = 0;
+  sqlite3_stmt *stmt = NULL;
   snprintf(sql, sizeof(sql), "SELECT order_id FROM Jobs WHERE jobid=%d", jobid);
-  int rc = sqlite3_exec(db, sql, callback, &value, &err_msg);
+  int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
   if (rc != SQLITE_OK) {
-    fprintf(stderr, "[get_order_id] SQL error: %s\n", err_msg);
-    sqlite3_free(err_msg);
+    fprintf(stderr, "[get_order_id] SQL error: %s\n", sqlite3_errmsg(db));
+    if (stmt) sqlite3_finalize(stmt);
     err[0] = -1;
-  } else {
-    err[0] = 0;
+    return 0;
   }
-  return value;
+  rc = sqlite3_step(stmt);
+  if (rc == SQLITE_ROW) {
+    int value = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+    err[0] = 0;
+    return value;
+  }
+  /* No row found — new job not yet in DB */
+  sqlite3_finalize(stmt);
+  err[0] = -1;
+  return 0;
 }
 
 int close_sqlite() {

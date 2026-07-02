@@ -529,6 +529,17 @@ called from `s_check_timeout()` after each timed-out job is pushed to the back.
 This keeps `SELECT jobid FROM Jobs ORDER BY order_id` consistent with the runtime
 queue order after restart.
 
+**`get_order_id()` bug (order_id=0)** — `get_order_id()` used `sqlite3_exec` with a
+callback, which could not distinguish "no row found" from "order_id = 0". For new
+jobs not yet in the DB, it returned `order_id = 0` with `err = 0`, so the fallback
+`max_order_id + 1` in `edit_DB()` never triggered. All non-timeout jobs ended up
+with `order_id = 0`, causing `ORDER BY order_id` to return them in arbitrary order
+after restart.
+
+**Fix** — Rewrote `get_order_id()` with `sqlite3_prepare_v2` / `sqlite3_step`. When
+`sqlite3_step()` returns something other than `SQLITE_ROW` (no row found), it sets
+`err = -1`, triggering the correct `max_order_id + 1` assignment.
+
 ## Current branch work
 
 The `cpu-only` branch focuses on CPU binding and cgroups refinements, plus job health monitoring:
