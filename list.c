@@ -170,7 +170,7 @@ static char *print_noresult(const struct Job *p) {
 
   if (p->state == PAUSE && is_sleep(p) == 1) {
     if (p->wall_time < 0) {
-      jobstate = "timeout"; // TODO delete this
+      jobstate = "requeue"; // PAUSE due to wall-time timeout, will retry
     } else {
       jobstate = "pause  "; // TODO delete this
     }

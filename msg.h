@@ -55,6 +55,7 @@ enum MsgTypes {
   COUNT_RUNNING,
   GET_LABEL,
   ADD_WTIME,
+  REQUEUE_JOB,
   LAST_ID,
   KILL_ALL,
   GET_CMD,

@@ -277,10 +277,11 @@ s_update_slots_usage()          ← called every server loop tick (~1s)
       ├─ for each: check_timeout(p)  ← jobs.c:211
       │   ├─ get_work_time_by_job()  → actual work time (excluding pauses)
       │   ├─ if work_time > i64abs(wall_time) && work_time >= 3:
-      │   │   ├─ safe_pause_job(p)   → SIGSTOP / cgroup freezer
-      │   │   ├─ wall_time = -i64abs(wall_time) - 86400  (negative + 24h)
-      │   │   ├─ update_field_int64("Jobs", wall_time)
-      │   │   ├─ state = PAUSE
+      │   │   ├─ s_relegate_job(p)     ← pause + negative wall_time + PAUSE
+      │   │   │   ├─ safe_pause_job(p)  → SIGSTOP / cgroup freezer
+      │   │   │   ├─ wall_time = -i64abs(wall_time) - 86400
+      │   │   │   ├─ update_field_int64("Jobs", wall_time)
+      │   │   │   └─ state = PAUSE
       │   │   └─ return 1 (timed out)
       │   └─ else → return 0 (not yet)
       └─ for each timed-out job:
@@ -308,7 +309,7 @@ The negative wall_time serves two purposes:
 
 **Display** (`list.c:172-176`):
 ```c
-if (p->wall_time < 0)  jobstate = "timeout";
+if (p->wall_time < 0)  jobstate = "requeue";
 else                   jobstate = "pause  ";
 ```
 
@@ -343,6 +344,7 @@ The positive `wall_time` means the job can now run for its full limit again.
 |---------|-------------|--------|
 | `ts -c <id>` (cont) | `-` → `+` | Resume immediately, clear cooldown |
 | `ts -p <id>` (pause) | `-` → `+` then... | Convert timeout-pause to user-pause (if timeout was waiting) |
+| `ts --requeue <id>` | `+` → `-` | Requeue a running/paused job: pause it, move to queue tail, set cooldown |
 | `ts --add-wtime <id> 1h` | sign preserved | Add or reduce wall_time (root only) |
 
 ### Ordering consistency (`movebottom_DB`)

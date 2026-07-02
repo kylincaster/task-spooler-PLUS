@@ -186,6 +186,7 @@ static struct option longOptions[] = {
     {"resume", optional_argument, NULL, 0},
     {"hold", required_argument, NULL, 0},
     {"cont", required_argument, NULL, 0},
+    {"requeue", required_argument, NULL, 0},
     {"lock-ts", no_argument, NULL, 0},
     {"unlock-ts", no_argument, NULL, 0},
     {"daemon", no_argument, NULL, 0},
@@ -252,6 +253,9 @@ void parse_opts(int argc, char **argv) {
         command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "cont") == 0) {
         command_line.request = c_CONT_JOB;
+        command_line.jobid = str2int64(optarg);
+      } else if (strcmp(longOptions[optionIdx].name, "requeue") == 0) {
+        command_line.request = c_REQUEUE_JOB;
         command_line.jobid = str2int64(optarg);
       } else if (strcmp(longOptions[optionIdx].name, "lock-ts") == 0) {
         command_line.request = c_LOCK_SERVER;
@@ -656,6 +660,7 @@ static void print_help(const char *cmd) {
   printf("  --tmp                       Store logs in tmp folder\n");
   printf("  --hold [id]                 Pause specified job\n");
   printf("  --cont [id]                 Resume paused job\n");
+  printf("  --requeue [id]              Requeue a running/paused job (move to tail)\n");
   printf("  --suspend [user]            Pause tasks and lock account\n");
   printf("  --resume [user]             Resume tasks and unlock account\n");
   printf("  --lock                      Lock server (%d sec; root no timeout)\n", DEFAULT_USER_LOCK_TIME);
@@ -947,6 +952,9 @@ int main(int argc, char **argv) {
     break;
   case c_ADD_WTIME:
     c_add_wtime();
+    break;
+  case c_REQUEUE_JOB:
+    c_requeue_job(command_line.jobid);
     break;
   case c_SHOW_CMD:
     if (!command_line.need_server)

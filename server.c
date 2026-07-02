@@ -602,6 +602,11 @@ static enum Break client_read(int index) {
     close(s);
     remove_connection(index);
     break;
+  case REQUEUE_JOB:
+    s_requeue_job(s, m.jobid, user);
+    close(s);
+    remove_connection(index);
+    break;
   case SUSPEND_USER:
     // Root, uid in m.jobid
     if (user == USER(0)) {

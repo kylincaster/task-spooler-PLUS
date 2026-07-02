@@ -48,6 +48,7 @@ enum Request {
   c_COUNT_RUNNING,
   c_GET_LABEL,
   c_ADD_WTIME,
+  c_REQUEUE_JOB,
   c_LAST_ID,
   c_KILL_ALL,
   c_SHOW_CMD,

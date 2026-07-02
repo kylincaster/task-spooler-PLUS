@@ -5,6 +5,13 @@ All notable changes to task-spooler-PLUS.
 ## [v2.8.0] — 2026-Q3
 
 ### Added
+- **`--requeue <jobid>`** — manually requeue a running or paused job. Calls
+  `s_relegate_job()` (same as automatic timeout) to pause the job, set negative
+  wall_time, mark PAUSE, then moves it to the end of the queue. The job will be
+  automatically retried after the cooldown period.
+- **`s_relegate_job()`** — extracted from `check_timeout()`; pauses a RUNNING job,
+  sets `wall_time = -|wall_time| - 86400`, marks `state = PAUSE`. Shared between
+  automatic timeout and manual `--requeue`.
 - **Orphan QUEUED auto-cleanup** — `s_cleanup_orphan_queued()` scans `active_jobs`
   for QUEUED jobs with `client_socket <= 0` (no client connected) and removes them
   via `s_delete_job()`. Triggered once ~30 minutes after server start from
@@ -16,6 +23,11 @@ All notable changes to task-spooler-PLUS.
 - **Timeout order_id sync** — `s_check_timeout()` now calls `movebottom_DB()`
   after moving a timed-out job to the back of `active_jobs`, so
   `SELECT ... ORDER BY order_id` matches the runtime queue after restart.
+
+### Changed
+- **State label "timeout" → "requeue"** — PAUSE jobs with negative wall_time
+  (timeout-wait) are now displayed as `requeue` in `ts -l` output, reflecting
+  that they will be automatically retried after the cooldown.
 
 ### Fixed
 - **`s_delete_job()` DB leak** — `s_delete_job()` (called from

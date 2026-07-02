@@ -208,6 +208,16 @@ struct Job *findjob(int jobid) {
     return (idx >= 0) ? (struct Job *)vec_get(&active_jobs, (size_t)idx) : NULL;
 }
 
+/* Relegate a job to "requeue" state: pause it, set negative wall_time (timeout
+   cooldown), mark PAUSE. Used by both automatic timeout and --requeue command. */
+void s_relegate_job(struct Job *p) {
+    if (p->state == RUNNING)
+        safe_pause_job(p);
+    p->wall_time = -i64abs(p->wall_time) - 86400; // plus 24 hrs
+    update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
+    p->state = PAUSE;
+}
+
 static int check_timeout(struct Job *p) {
     // printf("check job %d\n", p->jobid);
     if (p->pid == 0) {
@@ -221,11 +231,7 @@ static int check_timeout(struct Job *p) {
     }
 
     printf("Job[%d|pid:%d] is time-out %ld sec (limit %ld)\n", p->jobid, p->pid, work_time, wall_time);
-    if (safe_pause_job(p) == 0) {
-        p->wall_time = -i64abs(p->wall_time) - 86400; // plus 24 hrs
-        update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
-        p->state = PAUSE;
-    }
+    s_relegate_job(p);
     return 1; // time-out
 }
 

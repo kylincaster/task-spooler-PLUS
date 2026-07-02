@@ -355,3 +355,35 @@ void s_cont_job(int s, int jobid, struct User *u) {
   }
   send_list_line(s, buff);
 }
+
+void s_requeue_job(int s, int jobid, struct User *u) {
+  struct Job *p = findjob(jobid);
+  if (p == NULL) {
+    snprintf(buff, 255, "Error: cannot find job [%d]\n", jobid);
+    send_list_line(s, buff);
+    return;
+  }
+  if (p->user != u && u->uid != 0) {
+    snprintf(buff, 255, "Error: job [%d] belongs to another user\n", jobid);
+    send_list_line(s, buff);
+    return;
+  }
+  if (p->state != RUNNING && p->state != PAUSE) {
+    snprintf(buff, 255, "Error: job [%d] is not running or paused\n", jobid);
+    send_list_line(s, buff);
+    return;
+  }
+
+  s_relegate_job(p);
+
+  /* Move to end of queue */
+  int idx = findjob_idx(jobid);
+  if (idx >= 0) {
+    vec_remove(&active_jobs, (size_t)idx);
+    vec_push(&active_jobs, p);
+    movebottom_DB(p->jobid);
+  }
+
+  snprintf(buff, 255, "Job [%d] requeued\n", jobid);
+  send_list_line(s, buff);
+}

@@ -19,6 +19,7 @@ void s_resume_user(int s, struct User *user);
 void s_resume_user_all(int s);
 void s_hold_job(int s, int jobid, struct User *user);
 void s_cont_job(int s, int jobid, struct User *user);
+void s_requeue_job(int s, int jobid, struct User *user);
 void s_lock_server(int s, struct User *user);
 void s_unlock_server(int s, struct User *user);
 int s_check_locker(struct User *user);

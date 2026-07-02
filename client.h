@@ -55,6 +55,7 @@ void c_suspend_user(int uid);
 void c_resume_user(int uid);
 void c_hold_job(int jobid);
 void c_cont_job(int jobid);
+void c_requeue_job(int jobid);
 int c_lock_server(void);
 int c_unlock_server(void);
 void c_check_daemon(void);

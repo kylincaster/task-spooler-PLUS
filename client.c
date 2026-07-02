@@ -653,6 +653,17 @@ void c_cont_job(int jobid) {
 }
 
 
+void c_requeue_job(int jobid) {
+  struct Msg m = default_msg();
+  m.type = REQUEUE_JOB;
+  m.jobid = jobid;
+  send_msg(server_socket, &m);
+  if (wait_server_lines_and_check("Error") == 0) {
+    c_wait_server_lines();
+  }
+}
+
+
 int c_tail() {
   char *str;
   pid_t pid;
