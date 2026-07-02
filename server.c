@@ -738,7 +738,7 @@ static enum Break client_read(int index) {
             send_msg(s, &resp);
             break;
         }
-        printf("RECONNECT %d for %d\n", jp->jobid, jp->state);
+        printf("RECONNECT %d for %s\n", jp->jobid, jstate2string(jp->state));
 
         /* Accept QUEUED, DELINK, RUNNING (and LOCKED/WAIT for completeness) */
         if ((jp->state == QUEUED || jp->state == DELINK
