@@ -163,6 +163,8 @@ int config_running(struct Job *p) {
     p->num_allocated = p->num_slots;
     p->user->jobs++;
     p->state = RUNNING;
+    p->wall_time = i64abs(p->wall_time);
+    update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
     rerun_job_config(p);
 #ifdef TS_CPU_BIND
     /* PAUSE -> RUNNING: re-allocate CPU binding if it was freed on pause.
@@ -244,8 +246,11 @@ static int s_check_timeout() {
 
     /* Push timed-out jobs to the back */
     size_t tn = vec_size(&timed_out);
-    for (size_t i = 0; i < tn; i++)
-        vec_push(&active_jobs, vec_get(&timed_out, i));
+    for (size_t i = 0; i < tn; i++) {
+        struct Job *p = (struct Job *)vec_get(&timed_out, i);
+        vec_push(&active_jobs, p);
+        movebottom_DB(p->jobid);
+    }
 
     int had_timeout = tn > 0;
     vec_destroy(&timed_out);
@@ -745,6 +750,10 @@ int s_newjob(int s, struct Msg *m, struct User *user) {
                 // jobDB_wait_num--;
                 ; // waitjob_flag = 1;
             } else {
+                snprintf(buff, sizeof(buff),
+                         "Error: jobid %d already exists and is not available\n",
+                         m->jobid);
+                send_list_line(s, buff);
                 return -1;
             }
         }
@@ -771,6 +780,26 @@ int s_newjob(int s, struct Msg *m, struct User *user) {
     p->client_socket = s;
     p->num_slots = m->u.newjob.num_slots;
     p->no_cpu_binding = m->u.newjob.no_cpu_binding;
+
+    /* Reject if job requests more slots than the user's max_slots limit.
+       max_slots <= 0 means unlimited (e.g. root). */
+    if (user->max_slots > 0 && p->num_slots > user->max_slots) {
+        printf("Error: job %d requests %d slots but user '%s' max is %d\n",
+               p->jobid, p->num_slots, user->name, user->max_slots);
+        snprintf(buff, sizeof(buff),
+                 "Error: job [%d] requests %d slots but user '%s' max is %d\n",
+                 p->jobid, p->num_slots, user->name, user->max_slots);
+        send_list_line(s, buff);
+        /* Remove from active_jobs and clean up */
+        for (size_t ii = 0; ii < vec_size(&active_jobs); ii++) {
+            if (vec_get(&active_jobs, ii) == p) {
+                vec_remove(&active_jobs, ii);
+                break;
+            }
+        }
+        destroy_job(p);
+        return -1;
+    }
     p->store_output = m->u.newjob.store_output;
     p->should_keep_finished = m->u.newjob.should_keep_finished;
     p->notify_errorlevel_to = 0;
@@ -987,6 +1016,7 @@ void s_delete_job(int jobid) {
         error("Job to be removed not found. jobid=%i", jobid);
 
     struct Job *p = (struct Job *)vec_remove(&active_jobs, (size_t)idx);
+    delete_DB(jobid, "Jobs");
     destroy_job(p);
 }
 
@@ -1694,4 +1724,22 @@ void joblist_dump(int fd) {
         write(fd, buffer, strlen(buffer));
         free(buffer);
     }
+}
+
+/* Remove orphaned QUEUED jobs whose client never reconnected after server restart.
+   Called once ~30 minutes after server start via server_loop(). */
+void s_cleanup_orphan_queued(void) {
+    size_t n = vec_size(&active_jobs);
+    int count = 0;
+    for (size_t i = n; i > 0; i--) {
+        struct Job *p = (struct Job *)vec_get(&active_jobs, i - 1);
+        if (p->state == QUEUED && p->client_socket <= 0) {
+            printf("orphan queued job %d removed (no reconnect within timeout)\n",
+                   p->jobid);
+            s_delete_job(p->jobid);
+            count++;
+        }
+    }
+    if (count > 0)
+        printf("cleaned %d orphan queued jobs\n", count);
 }

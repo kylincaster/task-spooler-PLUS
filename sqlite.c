@@ -443,6 +443,15 @@ int movetop_DB(int jobid) {
   return set_order_id_DB(jobid, order_id);
 }
 
+int movebottom_DB(int jobid) {
+  int err;
+  int order_id = max_order_id(&err) + 1;
+  if (err != 0) {
+    return err;
+  }
+  return set_order_id_DB(jobid, order_id);
+}
+
 /*
 static void clear_DB(const char* table) {
     char* err_msg;

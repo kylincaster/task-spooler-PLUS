@@ -119,7 +119,6 @@ int c_wait_newjob_ok() {
   if (res == -1)
     error("Error in wait_newjob_ok");
   if (m.type == NEWJOB_NOK) {
-    fprintf(stderr, "Error: maybe conflict jobid\n");
     exit(EXITCODE_QUEUE_FULL);
   }
 

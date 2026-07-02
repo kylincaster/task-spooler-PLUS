@@ -279,6 +279,17 @@ void server_main(int notify_fd, char *_path) {
 
   set_default_maxslots();
 
+  /* Cap each user's max_slots to the global max_slots at startup.
+     Skip root (uid=0, unlimited). */
+  for (size_t i = 0; i < vec_size(&users_vec); i++) {
+      struct User *u = USER(i);
+      if (u->uid != 0 && u->max_slots > max_slots) {
+          printf("Capping user '%s' max_slots from %d to %d (global limit)\n",
+                 u->name, u->max_slots, max_slots);
+          u->max_slots = max_slots;
+      }
+  }
+
   initialize_log_dir();
   cgroups_clean_all_finished();
 #ifdef CGROUP_V2
@@ -324,6 +335,7 @@ void server_main(int notify_fd, char *_path) {
   }
 
   s_read_sqlite();
+  s_update_slots_usage();
 #ifdef TS_CPU_BIND
   cgroups_restore_all_cpu_bind();
 #endif
@@ -419,6 +431,19 @@ static void server_loop(int ls) {
         if (health_ticks >= 10) {
             health_ticks = 0;
             s_check_running_health();
+        }
+    }
+
+    { /* One-time cleanup of orphan QUEUED jobs — ~30 minutes after server start */
+        static int cleanup_done = 0;
+        static time_t cleanup_start = 0;
+        if (!cleanup_done) {
+            if (cleanup_start == 0)
+                cleanup_start = get_monotonic_sec();
+            else if (get_monotonic_sec() - cleanup_start > 1800) {
+                s_cleanup_orphan_queued();
+                cleanup_done = 1;
+            }
         }
     }
 
@@ -713,6 +738,7 @@ static enum Break client_read(int index) {
             send_msg(s, &resp);
             break;
         }
+        printf("RECONNECT %d for %d\n", jp->jobid, jp->state);
 
         /* Accept QUEUED, DELINK, RUNNING (and LOCKED/WAIT for completeness) */
         if ((jp->state == QUEUED || jp->state == DELINK

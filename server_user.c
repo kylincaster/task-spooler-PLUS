@@ -268,6 +268,15 @@ void s_hold_job(int s, int jobid, struct User *u) {
   }
 
   if (p->state == PAUSE) {
+    /* wall_time < 0 means it's a "timeout wait" (resume failed due to slots),
+       not a true user pause. Allow converting to a proper user pause. */
+    if (p->wall_time < 0) {
+      p->wall_time = i64abs(p->wall_time);
+      update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
+      snprintf(buff, 255, "To pause job [%d] successfully (was timeout wait)!\n", jobid);
+      send_list_line(s, buff);
+      return;
+    }
     snprintf(buff, 255, "The job [%d] is already in PAUSE.\n", jobid);
     send_list_line(s, buff);
     return;
@@ -338,6 +347,7 @@ void s_cont_job(int s, int jobid, struct User *u) {
       } else {
         snprintf(buff, 255, "Not enough slots for job [%d], set as time-out wait\n", jobid);
         p->wall_time = -i64abs(p->wall_time);
+        update_field_int64("Jobs", p->jobid, "wall_time", p->wall_time);
       }
     } else {
       snprintf(buff, 255, "Error: cannot rerun job [%d]\n", jobid);

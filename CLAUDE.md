@@ -2,6 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What is ts?
+
+**Task Spooler PLUS (`ts`) is a C-language multi-user job scheduler — think of it as a lightweight Slurm for shared workstations.** A single `ts` binary acts as both client and server, communicating over a Unix domain socket. No daemon management, no database setup, no cluster infrastructure.
+
+### One-line mental model
+
+```
+You type "ts sleep 30" → main.c parses CLI → client sends NEWJOB over Unix socket
+→ server enqueues → next_run_job() fires when slots/deps are ready →
+server tells client to RUNJOB → client fork()+execvp(your command) →
+waitpid() → server gets ENDJOB → writes SQLite, frees slots, triggers callbacks
+```
+
+### Who it's for
+
+Shared workstations with a handful of users running simulation, ML training, or batch jobs — where you want Slurm-like scheduling (queues, dependencies, resource limits, multi-user) without deploying a cluster infrastructure.
+
+### Key differentiators vs. original Task Spooler
+
+| | Original TS | TS PLUS |
+|---|---|---|
+| **Users** | One queue per user | Central server, multi-user with per-user slot limits |
+| **Recovery** | Jobs lost on crash | SQLite3 WAL — all jobs survive crashes and reboots |
+| **Resource control** | None | cgroups v1/v2 CPU limiting, freezer pause/resume, NUMA CPU binding |
+| **Scheduling** | FIFO only | Dependency chains, wall-time auto-pause, `--at` scheduled execution |
+| **User mgmt** | None | Dynamic user config, suspend/resume per user, `ts -X` hot-reload |
+| **Resilience** | Disconnected on server restart | Auto-reconnect, re-attach running jobs seamlessly |
+
 ## Build & Run
 
 ```bash
@@ -95,6 +123,74 @@ ts (client)  ──Unix socket──▶  ts (server daemon)
 - **`struct Client_conn`** (`server.h`) — per-connection state: socket fd, hasjob flag, jobid, `struct User *user`
 - **`struct CommandLine`** (`main.h`) — parsed CLI state, passed through to client functions
 
+### Full request flow (submitting a job)
+
+```
+ts sleep 30
+  │
+  ├─ main.c: parse_opts()
+  │   → command_line.request = c_QUEUE
+  │   → command_line.command = ["sleep", "30"]
+  │
+  ├─ server_start.c: ensure_server_up()
+  │   → if server not running, fork()+exec(ts --daemon)
+  │
+  ├─ client.c: c_new_job()
+  │   → build Msg{NEWJOB, command, path, env, slots, wall_time...}
+  │   → send_msg() over Unix socket
+  │   → recv_msg() → gets jobid back
+  │
+  ├─ server.c: server_loop() — single-threaded select()
+  │   │
+  │   ├─ accept() → SO_PEERCRED → find_user_by_uid()
+  │   ├─ recv_msg() → client_read()
+  │   │   └─ case NEWJOB:
+  │   │       └─ jobs.c: s_newjob()
+  │   │           ├─ s_update_slots_usage()     # clean dead PIDs first
+  │   │           ├─ newjobptr() → vec_push(&active_jobs)
+  │   │           ├─ set state=QUEUED
+  │   │           ├─ recv dependencies & command & env strings
+  │   │           └─ insert_DB("Jobs")
+  │   │
+  │   └─ (next select() tick) → next_run_job()
+  │       ├─ for each QUEUED job:
+  │       │   ├─ check user slot limit (user->busy + N ≤ user->max_slots)
+  │       │   ├─ check global busy_slots + N ≤ max_slots
+  │       │   ├─ check dependencies satisfied
+  │       │   ├─ check schedule_time reached
+  │       │   └─ if all OK → s_mark_job_running() + s_send_runjob()
+  │       └─ s_send_runjob():
+  │           └─ send Msg{RUNJOB} to client
+  │
+  ├─ client.c: recv RUNJOB → execute.c: run_job(jobid)
+  │   ├─ fork()
+  │   │   ├─ CHILD: run_child()
+  │   │   │   ├─ wait for cgroup creation (cgroups_freeze_ok)
+  │   │   │   ├─ open output file → dup2(stdout/stderr)
+  │   │   │   ├─ setsid()  # new process group
+  │   │   │   ├─ optionally retry on transient failure
+  │   │   │   └─ execvp("sleep", ["30"])
+  │   │   └─ PARENT: run_parent()
+  │   │       ├─ read output filename + start time from pipe
+  │   │       ├─ install SIGINT handler for ts -k
+  │   │       ├─ send Msg{RUNJOB_OK, ofname, pid} to server
+  │   │       ├─ waitpid(pid)  # blocks until child exits
+  │   │       ├─ times() → calculate real/user/system_sec
+  │   │       └─ c_end_of_job() → send Msg{ENDJOB, result}
+  │   └─ (client exits or waits for next command)
+  │
+  ├─ server.c: recv ENDJOB → jobs.c: job_finished()
+  │   ├─ move job from active_jobs → finished_jobs
+  │   ├─ update DB: insert Finished, delete Jobs
+  │   ├─ cgroups_clean_job()  # remove cgroup directory
+  │   ├─ cpu_bind_free()  # release CPU allocation
+  │   ├─ notify_errorlevel() → wake dependent jobs
+  │   ├─ on_finish hook (TS_ONFINISH or --on-finish)
+  │   └─ next_run_job()  # try to dispatch waiting jobs
+  │
+  └─ Final state: job is FINISHED in finished_jobs vec + "Finished" DB table
+```
+
 ### Job state machine
 
 ```
@@ -150,6 +246,288 @@ Build with `make CGROUP_V2=1` for cgroups v2, or just `make` for v1 (default). P
 ### Environment variables
 
 Key overrides: `TS_SOCKET`, `TS_SLOTS`, `TS_USER_PATH`, `TS_LOGFILE_PATH`, `TS_SQLITE_PATH`, `TS_MAXFINISHED`, `TS_MAX_WALL_TIME`, `TS_SORTJOBS`, `TS_SAVELIST`, `TS_ONFINISH`.
+
+## Wall-Time Timeout Mechanism
+
+### How wall-time is set
+
+```
+ts --wtime 30s   sleep 100     # job runs max 30 seconds
+ts --wtime 2.5h  make -j8     # max 2.5 hours
+ts --wtime 1d    ./train.py   # max 1 day
+```
+
+- Use `--wtime` with a duration string (suffixes: `s`, `m`, `H`, `d`, `w`; no suffix = seconds).
+- Default is **7 days** (`DEFAULT_MAX_WALL_TIME = 604800`), overridden by env `TS_MAX_WALL_TIME`.
+- The effective wall_time is `min(user's --wtime, get_max_wall_time())`, set at job creation (`jobs.c:808-813`).
+
+### Parse duration format (`parse_time`, runtime_limit.c)
+
+- Concatenated durations like `1h30m`, `30s`, `2d`, `1.5H` (case-insensitive).
+- Suffixes: `s`=1, `m`=60, `h`=3600, `d`=86400, `w`=604800.
+- Range: `±86400000` seconds (±1000 days).
+- `--add-wtime` accepts negative values (e.g. `-30m`) to reduce remaining time.
+
+### Timeout detection flow
+
+```
+s_update_slots_usage()          ← called every server loop tick (~1s)
+  └─ s_check_timeout()          ← jobs.c:232
+      ├─ backward scan active_jobs for RUNNING jobs
+      ├─ for each: check_timeout(p)  ← jobs.c:211
+      │   ├─ get_work_time_by_job()  → actual work time (excluding pauses)
+      │   ├─ if work_time > i64abs(wall_time) && work_time >= 3:
+      │   │   ├─ safe_pause_job(p)   → SIGSTOP / cgroup freezer
+      │   │   ├─ wall_time = -i64abs(wall_time) - 86400  (negative + 24h)
+      │   │   ├─ update_field_int64("Jobs", wall_time)
+      │   │   ├─ state = PAUSE
+      │   │   └─ return 1 (timed out)
+      │   └─ else → return 0 (not yet)
+      └─ for each timed-out job:
+          ├─ vec_remove + vec_push to back of active_jobs
+          └─ movebottom_DB(jobid)  → order_id = max+1 (DB sync)
+```
+
+**Key function — `get_work_time_by_job()`** (runtime_limit.c):
+```c
+time_t t = (p->state == PAUSE) ? p->info.pause_time : get_monotonic_sec();
+return t - p->info.start_time - p->info.pause_duration;
+```
+This is **wall-clock time excluding pauses**. Uses `CLOCK_MONOTONIC` so system sleep doesn't count.
+
+### What happens to the timed-out job
+
+1. **Process is frozen** — `safe_pause_job()` sends `SIGSTOP` to the process group (or freezes the cgroup), and frees CPU binding cores.
+2. **wall_time becomes negative** — the negative sign is a flag meaning "timeout-paused" (vs user-paused). The extra `-86400` (24h) is a **cooldown offset**.
+3. **Job moves to queue back** — `vec_remove` + `vec_push` + `movebottom_DB()` ensures other jobs get dispatched first.
+4. **DB synced** — `wall_time` and `order_id` are written to SQLite so ordering survives restart.
+
+### Negative wall_time / 24h cooldown
+
+The negative wall_time serves two purposes:
+
+**Display** (`list.c:172-176`):
+```c
+if (p->wall_time < 0)  jobstate = "timeout";
+else                   jobstate = "pause  ";
+```
+
+**Resume decision** (`next_run_job()`, jobs.c:1085-1095):
+```c
+if (p->state == PAUSE && p->wall_time < 0) {
+    if (i64abs(p->wall_time) <= get_cpu_time_by_pid(p->pid))
+        continue;  // still cooling
+    config_running(p);
+    s_send_runjob(p->client_socket, p->jobid);
+}
+```
+- The absolute value of negative wall_time = `old_limit + 86400` is the **CPU time threshold** the process must reach before retry.
+- `get_cpu_time_by_pid()` reads `/proc/pid/stat` (user+system ticks → seconds).
+- Once the process has consumed enough CPU time to exceed the threshold, it can be re-dispatched.
+
+### Resume: `config_running()` (jobs.c:151)
+
+```c
+p->state = RUNNING;
+p->wall_time = i64abs(p->wall_time);    // clear negative flag → positive limit
+update_field_int64("Jobs", "wall_time");
+rerun_job_config(p);                    // clear pause_time, update pause_duration
+cgroups_thaw_job(p);                    // SIGCONT / thaw cgroup
+```
+
+The positive `wall_time` means the job can now run for its full limit again.
+
+### User commands on paused jobs
+
+| Command | Sign change | Effect |
+|---------|-------------|--------|
+| `ts -c <id>` (cont) | `-` → `+` | Resume immediately, clear cooldown |
+| `ts -p <id>` (pause) | `-` → `+` then... | Convert timeout-pause to user-pause (if timeout was waiting) |
+| `ts --add-wtime <id> 1h` | sign preserved | Add or reduce wall_time (root only) |
+
+### Ordering consistency (`movebottom_DB`)
+
+When a job times out, `s_check_timeout()` removes it from its current position in `active_jobs` and pushes it to the back. The function `movebottom_DB(jobid)` (sqlite.c) sets the SQLite `order_id` to `max(order_id) + 1`, ensuring `SELECT jobid FROM Jobs ORDER BY order_id` produces the same order as the runtime queue after restart.
+
+## Restart Recovery
+
+When the server dies (crash / reboot / kill), the **client processes survive** because they forked the actual user commands. SQLite3 in WAL mode preserves all job state. Here is the complete recovery sequence:
+
+### 1. Server restart — startup sequence
+
+```
+server_main()
+  │
+  ├─ 1. Bind Unix socket, init users, read user.txt
+  ├─ 2. cgroups_clean_all_finished()      # remove stale cgroup dirs
+  ├─ 3. cgroups_v1_init() / v2_init()     # verify cgroup controllers accessible
+  ├─ 4. cpu_bind_init()                   # build topology index, reset cpu_owner[]
+  ├─ 5. open_sqlite()                     # open DB in WAL mode
+  ├─ 6. init_jobs()                       # vec_init(&active/finished_jobs)
+  ├─ 7. get_jobids_DB()                   # restore jobid counter from Global table
+  ├─ 8. s_read_sqlite()                   # ← CORE: restore all jobs from DB
+  │   └─ for each job in "Jobs" table:
+  │       └─ s_add_job() — state-dependent restore logic:
+  │           ├─ RUNNING + pause_time>0 + PID alive  → PAUSE (frozen cgroup)
+  │           ├─ RUNNING + PID alive                 → RUNNING (client will reconnect)
+  │           ├─ RUNNING + PID dead                  → delete from DB (zombie)
+  │           ├─ QUEUED / LOCKED                     → QUEUED (waiting for reconnect)
+  │           ├─ PAUSE + PID alive                   → PAUSE (frozen, waiting for cont)
+  │           └─ else                                → destroy_job() (discard)
+  ├─ 9. s_update_slots_usage()            # recalc busy_slots from alive RUNNING jobs
+  ├─10. cgroups_restore_all_cpu_bind()    # scan /sys/fs/cgroup/ for TASK_SPOOLER_* dirs
+  │   └─ for each cgroup dir:
+  │       ├─ PID dead              → remove orphan cgroup
+  │       ├─ no matching ts job    → remove orphan cgroup (let kernel clean up)
+  │       ├─ RUNNING/PAUSE + alive → cpu_bind_claim() + cgroups_set_cpuset()
+  │       └─ other states ignore   → (cgroup shouldn't exist)
+  │
+  └─ server_loop()                    # enter select() loop, accept clients
+```
+
+### 2. Client reconnect flow
+
+When a running client's `recv_msg()` returns 0 or -1 (server socket broken):
+
+```
+c_wait_server_commands()
+  │ recv_msg() → error
+  │
+  ├─ reconnect_to_server()
+  │   ├─ close old socket
+  │   ├─ loop: socket() + connect() every 5 sec until success
+  │   └─ return new server_socket
+  │
+  ├─ send Msg{RECONNECT, jobid, pid}   # claim the job back
+  │
+  └─ server.c: case RECONNECT:
+      ├─ get_job(jobid)
+      ├─ reject if job FINISHED/SKIPPED
+      ├─ verify job belongs to same user (SO_PEERCRED)
+      ├─ if job->pid != 0: verify pid matches (anti-hijacking)
+      ├─ clear old connection entry → set new socket
+      ├─ send Msg{RECONNECT_OK}
+      └─ if job was RUNNING but pid==0: re-send RUNJOB
+    
+    Client receives RECONNECT_OK
+      → continue c_wait_server_commands() loop
+```
+
+### 3. ENDJOB after reconnect
+
+After the job finishes, the client sends `ENDJOB` via the new socket:
+
+```
+client: run_parent() → waitpid() → c_end_of_job()
+  │ send Msg{ENDJOB, result} over new socket
+  │ recv Msg{ENDJOB_OK}
+  │
+  ├─ if ENDJOB_OK not received → reconnect_to_server() again
+  │   → send RECONNECT → recv RECONNECT_OK
+  │   → resend ENDJOB
+  │   → recv ENDJOB_OK
+  │
+  └─ run --on-finish callback (user context)
+      return errorlevel to ts exit code
+```
+
+### 4. What survives vs. what is lost
+
+| Survives | Lost |
+|---|---|
+| All job states (QUEUED/RUNNING/PAUSE) | Output file descriptors (re-opened via `/proc/PID/fd/1`) |
+| Job commands, labels, environment | Client socket connections (re-established via RECONNECT) |
+| Timing data (start/end/pause times) | In-flight `select()` notifications |
+| Job IDs counter (Global table) | CPU binding state (restored from cgroup filesystem) |
+| Finished job list | |
+
+### 5. Queue restore detail (s_add_job)
+
+```
+s_add_job(job)
+  │
+  ├─ state == RUNNING:
+  │   ├─ pause_time > 0 && PID alive  → PAUSE (restore frozen state)
+  │   ├─ PID alive                     → RUNNING (keep, clear client_socket=0)
+  │   └─ PID dead                      → delete_DB() + destroy_job()
+  │
+  ├─ state == QUEUED / LOCKED:
+  │   │  → keep QUEUED, client_socket=0 (client reconnects to run it)
+  │   └─ user->queue++
+  │
+  ├─ state == PAUSE:
+  │   │  → keep PAUSE, set pause_time if 0
+  │   └─ (cgroup is still frozen, waiting for `ts -c <id>`)
+  │
+  └─ else → destroy_job()
+```
+
+### 6. QUEUED job reconnect & DB leak (s_delete_job)
+
+RECONNECT handles QUEUED jobs too (server.c RECONNECT case accepts `jp->state == QUEUED`).
+After a restart, a QUEUED job is restored with `client_socket = 0` (see §5 above).
+When the original client reconnects, the server sets `jp->client_socket = s` and the job
+can be dispatched normally.
+
+**⚠️ DB leak scenario** — If the client disconnects a **second time** while the job is still QUEUED:
+
+```
+1. Client submits QUEUED job    → insert_DB(job, "Jobs")
+2. Server restart               → s_add_job() restores from DB, client_socket = 0
+3. Client RECONNECT             → jp->client_socket = s (valid socket)
+4. Client disconnects again     → clean_after_client_disappeared()
+                                   → s_delete_job(jobid)
+                                     → vec_remove(&active_jobs)
+                                     → destroy_job(p)
+                                     → ~~~ NO delete_DB() ~~~ (pre-v2.8.0)
+```
+
+Before the fix, `s_delete_job()` only removed the job from `active_jobs` and freed
+memory, but **never deleted the SQLite "Jobs" row**. On the next restart the orphaned
+job would be resurrected. This also affects `remove_connection()`, which also calls
+`s_delete_job()`.
+
+**Fix** (jobs.c): `s_delete_job()` now calls `delete_DB(jobid, "Jobs")` before
+`destroy_job()`, matching the behavior of `s_remove_job()` (the `ts -r` path).
+
+**Orphan QUEUED auto-cleanup** — After server restart, QUEUED jobs are restored with
+`client_socket = 0` waiting for client RECONNECT. If no client reconnects within 30
+minutes, the job is considered orphaned and is automatically removed.
+
+```
+server_loop() — every ~1s select() tick:
+  │
+  ├─ health check (every 10s)
+  │
+  ├─ ORPHAN QUEUED CLEANUP (once, ~30min after boot):
+  │   ├─ s_cleanup_orphan_queued()
+  │   │   └─ backward scan active_jobs
+  │   │       └─ state == QUEUED && client_socket <= 0
+  │   │           → s_delete_job() (vec_remove + delete_DB + destroy)
+  │   └─ cleanup_done = 1  (never runs again)
+  │
+  ├─ next_run_job()
+  └─ s_check_holdon()
+```
+
+Implementation uses two `static` variables in `server_loop()`:
+- `cleanup_start` — set to `get_monotonic_sec()` on first tick
+- `cleanup_done` — set to 1 after cleanup executes
+
+No thread, no pipe, no extra socket — the existing 1-second `select()` timeout serves
+as the timer. Jobs whose client reconnects before the 30-minute window get a valid
+`client_socket` and are skipped by the cleanup.
+
+**Timeout order_id sync** — When a RUNNING job wall-time expires, `s_check_timeout()`
+moves it to the end of `active_jobs` (backward scan → `vec_remove` + `vec_push`).
+Previously only the in-memory queue was reordered; the SQLite `order_id` was not
+updated. After restart the job would reappear at its original position instead of
+the end.
+
+**Fix** — Added `movebottom_DB(jobid)` (sqlite.c) which sets `order_id = max(order_id) + 1`,
+called from `s_check_timeout()` after each timed-out job is pushed to the back.
+This keeps `SELECT jobid FROM Jobs ORDER BY order_id` consistent with the runtime
+queue order after restart.
 
 ## Current branch work
 

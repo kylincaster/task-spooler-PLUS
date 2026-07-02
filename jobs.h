@@ -135,6 +135,7 @@ int s_check_running_pid(pid_t pid);
 void s_read_sqlite(void);
 int s_find_pid(pid_t target_pid, int deep_search);
 int s_update_slots_usage(void);
+void s_cleanup_orphan_queued(void);
 void send_list_line(int s, const char *str);
 void notify_errorlevel(struct Job *p);
 void dump_jobs_struct(FILE *out);
